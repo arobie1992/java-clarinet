@@ -16,16 +16,11 @@ repositories {
 }
 
 dependencies {
-    // Use JUnit Jupiter for testing.
+    implementation("org.slf4j:slf4j-api:2.0.13")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.17.1")
+
     testImplementation(libs.junit.jupiter)
-
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-
-    // This dependency is exported to consumers, that is to say found on their compile classpath.
-    api(libs.commons.math3)
-
-    // This dependency is used internally, and not exposed to consumers on their own compile classpath.
-    implementation(libs.guava)
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
