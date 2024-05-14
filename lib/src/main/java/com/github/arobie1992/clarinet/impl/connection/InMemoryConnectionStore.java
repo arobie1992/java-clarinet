@@ -3,8 +3,10 @@ package com.github.arobie1992.clarinet.impl.connection;
 import com.github.arobie1992.clarinet.connection.*;
 import com.github.arobie1992.clarinet.peer.Peer;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 public class InMemoryConnectionStore implements ConnectionStore {
@@ -30,6 +32,19 @@ public class InMemoryConnectionStore implements ConnectionStore {
                 throw new NoSuchConnectionException(connectionId);
             }
             return updateFunction.apply(existing);
+        });
+    }
+
+    @Override
+    public Collection<ConnectionId> all() {
+        return connections.keySet();
+    }
+
+    @Override
+    public void read(ConnectionId connectionId, Consumer<Connection> readFunction) {
+        connections.compute(connectionId, (id, val) -> {
+            readFunction.accept(val == null ? null : ReadOnlyConnection.from(val));
+            return val;
         });
     }
 }

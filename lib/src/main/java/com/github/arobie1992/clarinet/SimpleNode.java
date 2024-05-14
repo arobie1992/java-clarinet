@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 
 class SimpleNode implements Node {
@@ -22,9 +23,22 @@ class SimpleNode implements Node {
     private final Predicate<Reputation> trustFunc;
     private final ReputationStore reputationStore;
 
+    SimpleNode(SimpleNodeBuilder builder) {
+        connectionStore = builder.connectionStore;
+        transport = builder.transport;
+        trustFunc = builder.trustFunction;
+        reputationStore = builder.reputationStore;
+    }
+
     @Override
     public List<Connection> connections() {
-
+        return connectionStore.all().stream().map(id -> {
+            var connRef = new AtomicReference<Connection>();
+            connectionStore.read(id, conn -> {
+                connRef.set(ReadOnlyConnection.from(conn));
+            });
+            return connRef.get();
+        }).toList();
     }
 
     @Override
