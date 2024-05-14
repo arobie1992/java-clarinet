@@ -7,7 +7,7 @@ public class ConnectErrorsException extends RuntimeException {
     private final List<String> errors;
 
     public ConnectErrorsException(ConnectionId connectionId, List<String> errors) {
-        super(String.format("Encountered errors while requesting connection %s", connectionId));
+        super(String.format("Encountered errors while requesting connection %s: %s", connectionId, errors));
         this.connectionId = connectionId;
         this.errors = List.copyOf(errors);
     }
