@@ -7,7 +7,7 @@ public class ConnectRejectedException extends RuntimeException {
     private final List<String> rejectReasons;
 
     public ConnectRejectedException(ConnectionId connectionId, List<String> rejectReasons) {
-        super(String.format("Encountered errors while requesting connection %s", connectionId));
+        super(String.format("Encountered errors while requesting connection %s: %s", connectionId, rejectReasons));
         this.connectionId = connectionId;
         this.rejectReasons = List.copyOf(rejectReasons);
     }
