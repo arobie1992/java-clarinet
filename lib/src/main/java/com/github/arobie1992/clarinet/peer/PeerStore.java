@@ -6,4 +6,5 @@ import java.util.function.Consumer;
 public interface PeerStore {
     void read(PeerId peerId, Consumer<Peer> consumer);
     Collection<PeerId> all();
+    PeerId self();
 }

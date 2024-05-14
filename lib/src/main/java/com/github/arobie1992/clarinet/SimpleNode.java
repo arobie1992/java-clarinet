@@ -54,7 +54,9 @@ class SimpleNode implements Node {
 
     @Override
     public Peer self() {
-
+        var ref = new AtomicReference<Peer>();
+        peerStore.read(peerStore.self(), p -> ref.set(ReadOnlyPeer.from(p)));
+        return ref.get();
     }
 
     @Override
