@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
-class ConnectionIdTests {
+class ConnectionIdTest {
 
     private final ConnectionId connectionId = ConnectionId.random();
 

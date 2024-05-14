@@ -3,7 +3,7 @@ package com.github.arobie1992.clarinet.connection;
 import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
 
-class NoSuchConnectionExceptionTests {
+class NoSuchConnectionExceptionTest {
 
     private final ConnectionId connectionId = ConnectionId.random();
     private final NoSuchConnectionException ex = new NoSuchConnectionException(connectionId);

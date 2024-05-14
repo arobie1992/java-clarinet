@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-class ConnectRejectedExceptionTests {
+class ConnectRejectedExceptionTest {
 
     private final ConnectionId connectionId = ConnectionId.random();
     private final List<String> reasons = List.of("test reason");
