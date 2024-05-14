@@ -3,7 +3,7 @@ package com.github.arobie1992.clarinet.connection;
 import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
 
-public class UnexpectedConnectionExceptionTests {
+class UnexpectedConnectionExceptionTests {
     private final ConnectionId expected = ConnectionId.random();
     private final ConnectionId actual = ConnectionId.random();
     private final UnexpectedConnectionException exception = new UnexpectedConnectionException(expected, actual);
