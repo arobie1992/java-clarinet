@@ -18,7 +18,7 @@ public class InMemoryConnectionStore implements ConnectionStore {
         var connectionId = ConnectionId.random();
         connections.compute(connectionId, (id, existing) -> {
             if (existing != null) {
-                throw new ExistingConnectionIDException(connectionId);
+                throw new ExistingConnectionIdException(connectionId);
             }
             return new InMemoryConnection(id, status, sender, null, receiver);
         });
