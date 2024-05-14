@@ -1,4 +1,4 @@
 package com.github.arobie1992.clarinet.data;
 
-public interface MessageID {
+public interface MessageId {
 }

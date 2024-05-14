@@ -1,9 +1,10 @@
 package com.github.arobie1992.clarinet;
 
-import com.github.arobie1992.clarinet.data.MessageID;
+import com.github.arobie1992.clarinet.data.MessageId;
 import com.github.arobie1992.clarinet.transport.TransportOptions;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import com.github.arobie1992.clarinet.connection.ConnectionOptions;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
@@ -30,9 +31,9 @@ public class IntegrationTests {
         queryCooperativePeer(receiver, messageId, witness);
     }
 
-    private void queryCooperativePeer(Node node, MessageID messageID, Node peer) {
-        node.query(messageID, peer.self());
-        var reputation = node.getReputation(peer.self());
+    private void queryCooperativePeer(Node node, MessageId messageID, Node peer) {
+        node.query(messageID, peer.self(), new TransportOptions(Optional.empty(), Optional.empty()));
+        var reputation = node.findReputation(peer.self());
         Assertions.assertEquals(1, reputation.value());
     }
 }

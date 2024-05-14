@@ -1,7 +1,7 @@
 package com.github.arobie1992.clarinet;
 
 import com.github.arobie1992.clarinet.connection.*;
-import com.github.arobie1992.clarinet.data.MessageID;
+import com.github.arobie1992.clarinet.data.MessageId;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.peer.PeerStore;
 import com.github.arobie1992.clarinet.peer.PeersRequest;
@@ -142,7 +142,7 @@ class SimpleNode implements Node {
     }
 
     @Override
-    public MessageID send(ConnectionId connectionID, TransportOptions transportOptions, byte[] data) {
-
+    public MessageId send(ConnectionId connectionID, TransportOptions transportOptions, byte[] data) {
+        throw new UnsupportedOperationException("Not implemented");
     }
 }

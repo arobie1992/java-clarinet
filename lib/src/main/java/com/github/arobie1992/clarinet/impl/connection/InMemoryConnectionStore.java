@@ -20,7 +20,7 @@ public class InMemoryConnectionStore implements ConnectionStore {
             if (existing != null) {
                 throw new ExistingConnectionIDException(connectionId);
             }
-            return new InMemoryConnection(status, sender, null, receiver);
+            return new InMemoryConnection(id, status, sender, null, receiver);
         });
         return connectionId;
     }

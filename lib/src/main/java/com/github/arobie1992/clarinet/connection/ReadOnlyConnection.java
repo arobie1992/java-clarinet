@@ -4,7 +4,13 @@ import com.github.arobie1992.clarinet.peer.Peer;
 
 import java.util.Optional;
 
-public record ReadOnlyConnection(ConnectionStatus status, Peer sender, Optional<Peer> witness, Peer receiver) implements Connection {
+public record ReadOnlyConnection(
+        ConnectionId connectionId,
+        ConnectionStatus status,
+        Peer sender,
+        Optional<Peer> witness,
+        Peer receiver
+) implements Connection {
     @Override
     public Connection updateStatus(ConnectionStatus status) {
         throw new UnsupportedOperationException();
@@ -16,6 +22,12 @@ public record ReadOnlyConnection(ConnectionStatus status, Peer sender, Optional<
     }
 
     public static ReadOnlyConnection from(Connection connection) {
-        return new ReadOnlyConnection(connection.status(), connection.sender(), connection.witness(), connection.receiver());
+        return new ReadOnlyConnection(
+                connection.connectionId(),
+                connection.status(),
+                connection.sender(),
+                connection.witness(),
+                connection.receiver()
+        );
     }
 }
