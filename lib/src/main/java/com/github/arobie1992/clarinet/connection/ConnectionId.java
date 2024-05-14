@@ -4,9 +4,9 @@ import java.util.Objects;
 import java.util.UUID;
 
 public class ConnectionId {
-    private UUID uuid;
+    private final UUID uuid;
 
-    private ConnectionId(UUID uuid) {
+    ConnectionId(UUID uuid) {
         this.uuid = uuid;
     }
 
