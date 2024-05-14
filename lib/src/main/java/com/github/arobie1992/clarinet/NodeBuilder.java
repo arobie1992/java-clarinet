@@ -1,6 +1,7 @@
 package com.github.arobie1992.clarinet;
 
 import com.github.arobie1992.clarinet.connection.ConnectionStore;
+import com.github.arobie1992.clarinet.peer.PeerStore;
 import com.github.arobie1992.clarinet.reputation.Reputation;
 import com.github.arobie1992.clarinet.reputation.ReputationStore;
 import com.github.arobie1992.clarinet.transport.Transport;
@@ -12,5 +13,6 @@ public interface NodeBuilder {
    NodeBuilder transport(Transport transport);
    NodeBuilder connectionStore(ConnectionStore connectionStore);
    NodeBuilder reputationStore(ReputationStore reputationStore);
+   NodeBuilder peerStore(PeerStore peerStore);
    Node build();
 }

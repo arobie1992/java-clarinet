@@ -3,7 +3,9 @@ package com.github.arobie1992.clarinet;
 import com.github.arobie1992.clarinet.connection.*;
 import com.github.arobie1992.clarinet.data.MessageID;
 import com.github.arobie1992.clarinet.peer.Peer;
+import com.github.arobie1992.clarinet.peer.PeerStore;
 import com.github.arobie1992.clarinet.peer.PeersRequest;
+import com.github.arobie1992.clarinet.peer.ReadOnlyPeer;
 import com.github.arobie1992.clarinet.reputation.Reputation;
 import com.github.arobie1992.clarinet.reputation.ReputationStore;
 import com.github.arobie1992.clarinet.transport.Transport;
@@ -22,28 +24,32 @@ class SimpleNode implements Node {
     private final Transport transport;
     private final Predicate<Reputation> trustFunc;
     private final ReputationStore reputationStore;
+    private final PeerStore peerStore;
 
     SimpleNode(SimpleNodeBuilder builder) {
         connectionStore = builder.connectionStore;
         transport = builder.transport;
         trustFunc = builder.trustFunction;
         reputationStore = builder.reputationStore;
+        peerStore = builder.peerStore;
     }
 
     @Override
     public List<Connection> connections() {
         return connectionStore.all().stream().map(id -> {
             var connRef = new AtomicReference<Connection>();
-            connectionStore.read(id, conn -> {
-                connRef.set(ReadOnlyConnection.from(conn));
-            });
+            connectionStore.read(id, conn -> connRef.set(ReadOnlyConnection.from(conn)));
             return connRef.get();
         }).toList();
     }
 
     @Override
     public List<Peer> peers() {
-
+        return peerStore.all().stream().map(id -> {
+            var ref = new AtomicReference<Peer>();
+            peerStore.read(id, p -> ref.set(ReadOnlyPeer.from(p)));
+            return ref.get();
+        }).toList();
     }
 
     @Override
