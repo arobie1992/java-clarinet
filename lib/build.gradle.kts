@@ -20,6 +20,7 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind:2.17.1")
 
     testImplementation(libs.junit.jupiter)
+    testImplementation("org.mockito:mockito-core:5.12.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

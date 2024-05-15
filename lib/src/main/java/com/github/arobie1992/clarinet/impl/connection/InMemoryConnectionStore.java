@@ -1,33 +1,32 @@
 package com.github.arobie1992.clarinet.impl.connection;
 
 import com.github.arobie1992.clarinet.connection.*;
+import com.github.arobie1992.clarinet.impl.support.ReadWriteStore;
 import com.github.arobie1992.clarinet.peer.Peer;
 
 import java.util.Collection;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
 public class InMemoryConnectionStore implements ConnectionStore {
 
-    private final Map<ConnectionId, Connection> connections = new ConcurrentHashMap<>();
+    private final ReadWriteStore<ConnectionId, Connection> connections = new ReadWriteStore<>();
 
     @Override
     public ConnectionId create(Peer sender, Peer receiver, ConnectionStatus status) {
         var connectionId = ConnectionId.random();
-        connections.compute(connectionId, (id, existing) -> {
+        connections.write(connectionId, existing -> {
             if (existing != null) {
                 throw new ExistingConnectionIdException(connectionId);
             }
-            return new InMemoryConnection(id, status, sender, null, receiver);
+            return new InMemoryConnection(connectionId, status, sender, null, receiver);
         });
         return connectionId;
     }
 
     @Override
     public void update(ConnectionId connectionId, Function<Connection, Connection> updateFunction) {
-        connections.compute(connectionId, (id, existing) -> {
+        connections.write(connectionId, existing -> {
             if(existing == null) {
                 throw new NoSuchConnectionException(connectionId);
             }
@@ -42,9 +41,6 @@ public class InMemoryConnectionStore implements ConnectionStore {
 
     @Override
     public void read(ConnectionId connectionId, Consumer<Connection> readFunction) {
-        connections.compute(connectionId, (id, val) -> {
-            readFunction.accept(val == null ? null : ReadOnlyConnection.from(val));
-            return val;
-        });
+        connections.read(connectionId, conn -> readFunction.accept(conn == null ? null : ReadOnlyConnection.from(conn)));
     }
 }
