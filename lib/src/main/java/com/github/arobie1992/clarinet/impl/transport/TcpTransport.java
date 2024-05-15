@@ -4,8 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.transport.Transport;
 import com.github.arobie1992.clarinet.transport.TransportOptions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -18,9 +16,15 @@ import java.util.Optional;
 
 public class TcpTransport implements Transport {
 
-    private static final Logger LOG = LoggerFactory.getLogger(TcpTransport.class);
+    private final ObjectMapper objectMapper;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    TcpTransport(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
+    public TcpTransport() {
+        this(new ObjectMapper());
+    }
 
     private int timeoutMillis(Optional<Duration> timeout) {
         var duration = timeout.orElse(Duration.ofSeconds(10));
@@ -30,11 +34,7 @@ public class TcpTransport implements Transport {
     @Override
     public void send(Peer peer, TransportOptions options, Object message) {
         try(var socket = new Socket()) {
-            var addrUri = new URI(peer.address());
-            socket.connect(new InetSocketAddress(addrUri.getHost(), addrUri.getPort()), timeoutMillis(options.connectTimeout()));
-            try(var out = socket.getOutputStream()) {
-                out.write(objectMapper.writeValueAsBytes(message));
-            }
+            send(peer, socket, options, message);
         } catch (URISyntaxException e) {
             throw new UncheckedURISyntaxException(e);
         } catch (IOException e) {
@@ -42,19 +42,23 @@ public class TcpTransport implements Transport {
         }
     }
 
+    private void send(Peer peer, Socket socket, TransportOptions options, Object message) throws IOException, URISyntaxException {
+        var addrUri = new URI(peer.address());
+        socket.connect(new InetSocketAddress(addrUri.getHost(), addrUri.getPort()), timeoutMillis(options.connectTimeout()));
+        var out = socket.getOutputStream();
+        out.write(objectMapper.writeValueAsBytes(message));
+        // use newline as the terminator symbol for messages
+        out.write('\n');
+    }
+
     @Override
     public <T> T exchange(Peer peer, TransportOptions options, Object message, Class<T> responseType) {
         try(var socket = new Socket()) {
-            var addrUri = new URI(peer.address());
-            socket.connect(new InetSocketAddress(addrUri.getHost(), addrUri.getPort()), timeoutMillis(options.connectTimeout()));
-            try(var out = socket.getOutputStream()) {
-                out.write(objectMapper.writeValueAsBytes(message));
-            }
+            send(peer, socket, options, message);
+            var in = socket.getInputStream();
             socket.setSoTimeout(timeoutMillis(options.readTimeout()));
-            try(var in = socket.getInputStream()) {
-                var bytes = in.readAllBytes();
-                return objectMapper.readValue(bytes, responseType);
-            }
+            var bytes = in.readAllBytes();
+            return objectMapper.readValue(bytes, responseType);
         } catch (URISyntaxException e) {
             throw new UncheckedURISyntaxException(e);
         } catch (IOException e) {
