@@ -4,10 +4,10 @@ import java.util.Objects;
 import java.util.UUID;
 
 public class ConnectionId {
-    private final UUID uuid;
+    private final UUID id;
 
-    ConnectionId(UUID uuid) {
-        this.uuid = uuid;
+    ConnectionId(UUID id) {
+        this.id = id;
     }
 
     public static ConnectionId random() {
@@ -15,20 +15,20 @@ public class ConnectionId {
     }
 
     @Override
-    public String toString() {
-        return uuid.toString();
-    }
-
-    @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ConnectionId that = (ConnectionId) o;
-        return Objects.equals(uuid, that.uuid);
+        return Objects.equals(id, that.id);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(uuid);
+        return Objects.hashCode(id);
+    }
+
+    @Override
+    public String toString() {
+        return id.toString();
     }
 }
