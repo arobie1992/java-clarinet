@@ -11,6 +11,7 @@ public record UriAddress(URI uri) implements Address {
         return uri;
     }
 
+    // TODO Probably going to come back to these parse functions to see if this setup is actually useful
     @Override
     public Function<URI, Address> parseFunction() {
         return UriAddress::new;
