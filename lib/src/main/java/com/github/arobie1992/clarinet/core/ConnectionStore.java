@@ -30,12 +30,13 @@ class ConnectionStore {
         return new Connection.Readable(connection);
     }
 
-    public Connection.WriteableReference findForWrite(ConnectionId connectionId) {
+    public WriteableReference findForWrite(ConnectionId connectionId) {
         var connection = connections.get(Objects.requireNonNull(connectionId));
         if (connection == null) {
             return new Connection.Absent();
         }
-        ((ConnectionImpl) connection).lock.writeLock().lock();
-        return new Connection.Writeable(connection);
+        var impl = (ConnectionImpl) connection;
+        impl.lock.writeLock().lock();
+        return new Writeable(impl);
     }
 }

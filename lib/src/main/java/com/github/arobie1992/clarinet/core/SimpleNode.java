@@ -41,7 +41,17 @@ class SimpleNode implements Node {
 
     @Override
     public ConnectionId connect(PeerId receiver, ConnectionOptions connectionOptions, TransportOptions transportOptions) {
-        return connectionStore.create(id(), receiver, Connection.Status.REQUESTING_RECEIVER);
+        var connectionId = connectionStore.create(id(), receiver, Connection.Status.REQUESTING_RECEIVER);
+        var peer = peerStore.all().findFirst().orElseThrow();
+        try(var ref = connectionStore.findForWrite(connectionId)) {
+            if(!(ref instanceof Writeable(ConnectionImpl connection))) {
+                throw new RuntimeException("Connect attempt failed");
+            }
+            connection.setWitness(peer.id());
+        } catch(Exception e) {
+            throw new RuntimeException(e);
+        }
+        return connectionId;
     }
 
     static class Builder implements NodeBuilder {
