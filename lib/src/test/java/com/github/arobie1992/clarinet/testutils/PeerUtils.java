@@ -1,4 +1,4 @@
-package com.github.arobie1992.clarinet.utils;
+package com.github.arobie1992.clarinet.testutils;
 
 import com.github.arobie1992.clarinet.impl.peer.StringPeerId;
 import com.github.arobie1992.clarinet.peer.PeerId;

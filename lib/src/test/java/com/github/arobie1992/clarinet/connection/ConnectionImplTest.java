@@ -1,8 +1,8 @@
 package com.github.arobie1992.clarinet.connection;
 
 import com.github.arobie1992.clarinet.peer.PeerId;
-import com.github.arobie1992.clarinet.utils.PeerUtils;
-import com.github.arobie1992.clarinet.utils.TestConnection;
+import com.github.arobie1992.clarinet.testutils.PeerUtils;
+import com.github.arobie1992.clarinet.testutils.TestConnection;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.ThrowingSupplier;
