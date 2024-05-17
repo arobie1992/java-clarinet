@@ -1,4 +1,4 @@
-package com.github.arobie1992.clarinet.connection;
+package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.testutils.AsyncAssert;
 import com.github.arobie1992.clarinet.testutils.PeerUtils;
@@ -39,14 +39,14 @@ class ConnectionStoreTest {
     @Test
     void testFindForReadAbsent() throws Exception {
         try(var ref = connectionStore.findForRead(ConnectionId.random())) {
-            assertEquals(ConnectionStore.Absent.class, ref.getClass());
+            assertEquals(Connection.Absent.class, ref.getClass());
         }
     }
 
     @Test
     void testCreate() throws Exception {
         try(var ref = connectionStore.findForRead(connectionId)) {
-            if (ref instanceof ConnectionStore.Readable(Connection connection)) {
+            if (ref instanceof Connection.Readable(Connection connection)) {
                 new TestConnection(connectionId, PeerUtils.senderId(), Optional.empty(), PeerUtils.receiverId(), Connection.Status.OPEN)
                         .assertMatches(connection);
             } else {
@@ -58,13 +58,13 @@ class ConnectionStoreTest {
     @Test
     void testFindForWriteAbsent() throws Exception {
         try(var ref = connectionStore.findForWrite(ConnectionId.random())) {
-            assertEquals(ConnectionStore.Absent.class, ref.getClass());
+            assertEquals(Connection.Absent.class, ref.getClass());
         }
     }
 
     private void runSyncTests(
-            Function<ConnectionId, ConnectionStore.ConnectionReference> task1,
-            Function<ConnectionId, ConnectionStore.ConnectionReference> task2,
+            Function<ConnectionId, Connection.Reference> task1,
+            Function<ConnectionId, Connection.Reference> task2,
             boolean expectFinished
     ) throws Throwable {
         var barrier = new CountDownLatch(1);

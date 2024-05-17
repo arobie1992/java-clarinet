@@ -1,7 +1,7 @@
 package com.github.arobie1992.clarinet.testutils;
 
-import com.github.arobie1992.clarinet.connection.Connection;
-import com.github.arobie1992.clarinet.connection.ConnectionId;
+import com.github.arobie1992.clarinet.core.Connection;
+import com.github.arobie1992.clarinet.core.ConnectionId;
 import com.github.arobie1992.clarinet.peer.PeerId;
 
 import java.util.Optional;

@@ -1,4 +1,4 @@
-package com.github.arobie1992.clarinet.connection;
+package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.peer.PeerId;
 
