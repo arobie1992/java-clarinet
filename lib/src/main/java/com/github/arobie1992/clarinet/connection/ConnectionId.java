@@ -10,7 +10,7 @@ public class ConnectionId {
         this.id = id;
     }
 
-    public static ConnectionId random() {
+    static ConnectionId random() {
         return new ConnectionId(UUID.randomUUID());
     }
 
