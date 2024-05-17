@@ -37,7 +37,7 @@ class IntegrationTest {
     }
 
     @Test
-    void testConnect() throws Exception {
+    void testCooperative() throws Exception {
         ctx.sender.peerStore().save(asPeer(ctx.witness));
         var connectionId = ctx.sender.connect(ctx.receiver.id(), new ConnectionOptions(), new TransportOptions());
         var expected = new TestConnection(
@@ -50,6 +50,37 @@ class IntegrationTest {
         verifyConnectionPresent(expected, ctx.sender);
         verifyConnectionPresent(expected, ctx.witness);
         verifyConnectionPresent(expected, ctx.receiver);
+        fail("Test sending messages, reputation, and querying");
+    }
+
+    @Test
+    void testMaliciousSender() {
+        fail("implement");
+    }
+
+    @Test
+    void testMaliciousWitness() {
+        fail("implement");
+    }
+
+    @Test
+    void testMaliciousReceiver() {
+        fail("implement");
+    }
+
+    @Test
+    void testMaliciousSenderAndWitness() {
+        fail("implement");
+    }
+
+    @Test
+    void testMaliciousSenderAndReceiver() {
+        fail("implement");
+    }
+
+    @Test
+    void testMaliciousWitnessAndReceiver() {
+        fail("implement");
     }
 
     private Peer asPeer(Node node) {
