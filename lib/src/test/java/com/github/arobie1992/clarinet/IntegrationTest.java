@@ -32,7 +32,7 @@ class IntegrationTest {
         final Node sender = Nodes.newBuilder().id(PeerUtils.senderId()).peerStore(new InMemoryPeerStore()).build();
         final Node witness = Nodes.newBuilder().id(PeerUtils.witnessId()).peerStore(new InMemoryPeerStore()).build();
         final Node receiver = Nodes.newBuilder().id(PeerUtils.receiverId()).peerStore(new InMemoryPeerStore()).build();
-        receiver.addresses().add(UriAddress.from(new URI("tcp://localhost")));
+        receiver.addresses().add(new UriAddress(new URI("tcp://localhost")));
         ctx = new Context(sender, witness, receiver);
     }
 
