@@ -4,6 +4,6 @@ import java.net.URI;
 import java.util.function.Function;
 
 public interface Address {
-    URI toURI();
+    URI asURI();
     Function<URI, Address> parseFunction();
 }

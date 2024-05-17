@@ -48,6 +48,7 @@ class SimpleNode implements Node {
                 throw new RuntimeException("Connect attempt failed");
             }
             connection.setWitness(peer.id());
+            connection.setStatus(Connection.Status.OPEN);
         } catch(Exception e) {
             throw new RuntimeException(e);
         }
