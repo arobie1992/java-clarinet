@@ -3,6 +3,7 @@ package com.github.arobie1992.clarinet.connection;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.utils.PeerUtils;
 import com.github.arobie1992.clarinet.utils.TestConnection;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.ThrowingSupplier;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -19,6 +20,13 @@ class ConnectionImplTest {
     private static final ConnectionId id = ConnectionId.random();
     private static final ConnectionImpl.Status status = ConnectionImpl.Status.REQUESTING_RECEIVER;
 
+    private ConnectionImpl connection;
+
+    @BeforeEach
+    void setUp() {
+        connection = new ConnectionImpl(id, PeerUtils.senderId(), PeerUtils.receiverId(), status);
+    }
+
     @ParameterizedTest()
     @MethodSource("creationPermutations")
     void testCreation(ConnectionId id, PeerId sender, PeerId receiver, ConnectionImpl.Status status, TestConnection expected) {
@@ -32,7 +40,6 @@ class ConnectionImplTest {
 
     @Test
     void testSetWitness() {
-        var connection = new ConnectionImpl(id, PeerUtils.senderId(), PeerUtils.receiverId(), status);
         connection.lock.writeLock().lock();
         assertDoesNotThrow(() -> connection.setWitness(PeerUtils.witnessId()));
         connection.lock.writeLock().unlock();
@@ -41,7 +48,6 @@ class ConnectionImplTest {
 
     @Test
     void testSetWitnessCannotUpdate() {
-        var connection = new ConnectionImpl(id, PeerUtils.senderId(), PeerUtils.receiverId(), status);
         connection.lock.writeLock().lock();
         connection.setWitness(PeerUtils.witnessId());
         var ex = assertThrows(UnsupportedOperationException.class, () -> connection.setWitness(PeerUtils.witnessId()));
@@ -51,14 +57,12 @@ class ConnectionImplTest {
 
     @Test
     void testSetWitnessThrowsWhenNotWriteLocked() {
-        var connection = new ConnectionImpl(id, PeerUtils.senderId(), PeerUtils.receiverId(), status);
         var ex = assertThrows(WriteLockException.class, () -> connection.setWitness(PeerUtils.witnessId()));
         assertEquals("setWitness", ex.operationName());
     }
 
     @Test
     void testSetStatus() {
-        var connection = new ConnectionImpl(id, PeerUtils.senderId(), PeerUtils.receiverId(), status);
         connection.lock.writeLock().lock();
         assertDoesNotThrow(() -> connection.setStatus(ConnectionImpl.Status.OPEN));
         connection.lock.writeLock().unlock();
@@ -67,7 +71,6 @@ class ConnectionImplTest {
 
     @Test
     void testSetStatusThrowsWhenNotWriteLocked() {
-        var connection = new ConnectionImpl(id, PeerUtils.senderId(), PeerUtils.receiverId(), status);
         var ex = assertThrows(WriteLockException.class, () -> connection.setStatus(ConnectionImpl.Status.OPEN));
         assertEquals("setStatus", ex.operationName());
     }
