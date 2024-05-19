@@ -21,6 +21,8 @@ dependencies {
 
     testImplementation(libs.junit.jupiter)
     testImplementation("org.mockito:mockito-core:5.12.0")
+    testImplementation("ch.qos.logback:logback-classic:1.5.6")
+    testImplementation("org.projectlombok:lombok:1.18.32")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

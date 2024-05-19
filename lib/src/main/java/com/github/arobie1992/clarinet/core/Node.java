@@ -1,16 +1,15 @@
 package com.github.arobie1992.clarinet.core;
 
-import com.github.arobie1992.clarinet.peer.Address;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
+import com.github.arobie1992.clarinet.transport.Transport;
 import com.github.arobie1992.clarinet.transport.TransportOptions;
-
-import java.util.Set;
 
 public interface Node {
     PeerId id();
-    Set<Address> addresses();
     PeerStore peerStore();
+    Transport transport();
+
     Connection.ReadableReference findConnection(ConnectionId connectionId);
     /**
      * Establishes an outgoing communication channel with the specified node at the specified address.

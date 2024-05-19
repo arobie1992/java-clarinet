@@ -6,6 +6,7 @@ import com.github.arobie1992.clarinet.peer.PeerStore;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 public class InMemoryPeerStore implements PeerStore {
@@ -18,12 +19,23 @@ public class InMemoryPeerStore implements PeerStore {
     }
 
     @Override
+    public Optional<Peer> find(PeerId id) {
+        var peer = peers.get(id);
+        if (peer == null) {
+            return Optional.empty();
+        }
+        return Optional.of(copy(peer));
+    }
+
+    @Override
     public Stream<Peer> all() {
-        return peers.values().stream().map(p -> {
-            var copy = new Peer(p.id());
-            copy.addresses().addAll(p.addresses());
-            return copy;
-        });
+        return peers.values().stream().map(InMemoryPeerStore::copy);
+    }
+
+    private static Peer copy(Peer peer) {
+        var copy = new Peer(peer.id());
+        copy.addresses().addAll(peer.addresses());
+        return copy;
     }
 
 }

@@ -45,7 +45,25 @@ class InMemoryPeerStoreTest {
     }
 
     @Test
-    void testAllDoesNotAllowMutation() throws URISyntaxException {
+    void testFindNotPresent() {
+        var peerOpt = store.find(PeerUtils.senderId());
+        assertTrue(peerOpt.isEmpty());
+    }
+
+    @Test
+    void testFindDoesNotPersistMutation() throws URISyntaxException {
+        store.save(new Peer(PeerUtils.senderId()));
+        var peerOpt = store.find(PeerUtils.senderId());
+        assertTrue(peerOpt.isPresent());
+        var peer = peerOpt.get();
+        assertEquals(PeerUtils.senderId(), peer.id());
+        peer.addresses().add(new UriAddress(new URI("tcp://localhost")));
+        var unupdatedPeer = store.find(PeerUtils.senderId()).orElseThrow();
+        assertTrue(unupdatedPeer.addresses().isEmpty());
+    }
+
+    @Test
+    void testAllDoesNotPersistMutation() throws URISyntaxException {
         store.save(new Peer(PeerUtils.senderId()));
         var peer = store.all().findFirst().orElseThrow();
         peer.addresses().add(new UriAddress(new URI("tcp://localhost")));
