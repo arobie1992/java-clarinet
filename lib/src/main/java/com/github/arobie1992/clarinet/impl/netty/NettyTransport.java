@@ -2,7 +2,6 @@ package com.github.arobie1992.clarinet.impl.netty;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.arobie1992.clarinet.core.Response;
 import com.github.arobie1992.clarinet.transport.*;
 import com.github.arobie1992.clarinet.peer.Address;
 import io.netty.bootstrap.ServerBootstrap;
@@ -30,7 +29,7 @@ import java.util.concurrent.TimeUnit;
 public class NettyTransport implements Transport, AutoCloseable {
 
     private final Map<Address, ChannelFuture> channels = new ConcurrentHashMap<>();
-    private final Map<String, Handler<Object>> handlers = new ConcurrentHashMap<>();
+    private final Map<String, Handler<Object, Object>> handlers = new ConcurrentHashMap<>();
     private final EventLoopGroup bossGroup = new NioEventLoopGroup();
     private final EventLoopGroup workerGroup = new NioEventLoopGroup();
     private final ServerBootstrap serverBootstrap;
@@ -117,17 +116,17 @@ public class NettyTransport implements Transport, AutoCloseable {
     }
 
     @Override
-    public void add(String endpoint, Handler<?> handler) {
+    public void add(String endpoint, Handler<?, ?> handler) {
         /*
          We're just concerned with converting it and passing it along. The generics are more to ensure that
          implementations of the handlers follow the rules.
          */
         //noinspection unchecked
-        handlers.put(endpoint, (Handler<Object>) handler);
+        handlers.put(endpoint, (Handler<Object, Object>) handler);
     }
 
     @Override
-    public Optional<Handler<?>> remove(String endpoint) {
+    public Optional<Handler<?, ?>> remove(String endpoint) {
         return Optional.ofNullable(handlers.remove(endpoint));
     }
 
@@ -151,8 +150,8 @@ public class NettyTransport implements Transport, AutoCloseable {
                 return objectMapper.readValue(bytes, responseType);
             } catch (JsonProcessingException e) {
                 try {
-                    var failResp = objectMapper.readValue(bytes, Response.Failure.class);
-                    throw new ExchangeErrorsException(failResp.errors());
+                    var errorResponse = objectMapper.readValue(bytes, ErrorResponse.class);
+                    throw new ExchangeErrorException(errorResponse.error());
                 } catch (JsonProcessingException e1) {
                     throw new MismatchedResponseTypeException(new String(bytes), responseType);
                 }

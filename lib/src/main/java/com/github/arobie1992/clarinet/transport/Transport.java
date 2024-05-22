@@ -9,8 +9,8 @@ public interface Transport {
     Address add(Address address);
     Optional<Address> remove(Address address);
     Collection<Address> addresses();
-    void add(String endpoint, Handler<?> handler);
-    Optional<Handler<?>> remove(String endpoint);
+    void add(String endpoint, Handler<?, ?> handler);
+    Optional<Handler<?, ?>> remove(String endpoint);
     Collection<String> endpoints();
     <T> T exchange(Address address, String endpoint, Object message, Class<T> responseType, TransportOptions options);
 }

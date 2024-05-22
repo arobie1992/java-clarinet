@@ -2,22 +2,21 @@ package com.github.arobie1992.clarinet.impl.netty;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.arobie1992.clarinet.core.Response;
+import com.github.arobie1992.clarinet.transport.ErrorResponse;
 import com.github.arobie1992.clarinet.transport.Handler;
 import com.github.arobie1992.clarinet.transport.Message;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.timeout.ReadTimeoutException;
 
-import java.util.List;
 import java.util.Map;
 
 // TODO deal with receive timeout: https://stackoverflow.com/questions/37271523/netty-configure-timeouts-on-tcp-server
 class HandlerDispatcher extends ChannelInboundHandlerAdapter {
-    private final Map<String, Handler<Object>> handlers;
+    private final Map<String, Handler<Object, Object>> handlers;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    HandlerDispatcher(Map<String, Handler<Object>> handlers) {
+    HandlerDispatcher(Map<String, Handler<Object, Object>> handlers) {
         this.handlers = handlers;
     }
 
@@ -35,12 +34,8 @@ class HandlerDispatcher extends ChannelInboundHandlerAdapter {
         // Make sure that the contents is parsed as the type the handler is expecting.
         // This is a pretty awful approach, but it should work for now.
         Object contents = objectMapper.readValue(objectMapper.writeValueAsString(message.contents()), handler.inputType());
-        var respOpt = handler.handle(contents);
-        if (respOpt.isPresent()) {
-            var resp = switch(respOpt.get()) {
-                case Response.Success(Object data) -> data;
-                case Response.Failure failResp ->  failResp;
-            };
+        var resp = handler.handle(contents);
+        if (resp != null) {
             writeResponse(ctx, resp);
         }
         ctx.close();
@@ -54,7 +49,7 @@ class HandlerDispatcher extends ChannelInboundHandlerAdapter {
         if(message == null && cause instanceof ReadTimeoutException) {
             message = "Read timeout";
         }
-        writeResponse(ctx, new Response.Failure(List.of(message == null ? "Unspecified error" : message)));
+        writeResponse(ctx, new ErrorResponse(message == null ? "Unspecified error" : message));
         ctx.close();
     }
 

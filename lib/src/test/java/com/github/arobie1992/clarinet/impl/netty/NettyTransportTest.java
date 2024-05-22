@@ -1,7 +1,6 @@
 package com.github.arobie1992.clarinet.impl.netty;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.arobie1992.clarinet.core.Response;
 import com.github.arobie1992.clarinet.impl.peer.UriAddress;
 import com.github.arobie1992.clarinet.peer.Address;
 import com.github.arobie1992.clarinet.testutils.ReflectionTestUtils;
@@ -35,12 +34,12 @@ import static org.mockito.Mockito.when;
 class NettyTransportTest {
 
     private record Message(String contents) {}
-    private static class TestHandler implements Handler<Message> {
-        Function<Message, Optional<Response>> delegate;
+    private static class TestHandler implements Handler<Message, Object> {
+        Function<Message, Object> delegate;
         private Message receivedMessage;
 
         @Override
-        public Optional<Response> handle(Message message) {
+        public Object handle(Message message) {
             receivedMessage = message;
             return delegate.apply(message);
         }
@@ -63,7 +62,7 @@ class NettyTransportTest {
     void setUp() throws URISyntaxException {
         address = transport.add(new UriAddress(new URI("tcp://localhost:0")));
         exchangeHandler.receivedMessage = null;
-        exchangeHandler.delegate = ignoredMessage -> Optional.of(new Response.Success(response));
+        exchangeHandler.delegate = ignoredMessage -> response;
         transport.add(exchangeEndpoint, exchangeHandler);
     }
 
@@ -103,21 +102,9 @@ class NettyTransportTest {
     }
 
     @Test
-    void testExchangeReceivesFailure() {
-        var errs = List.of("Test error");
-        exchangeHandler.delegate = message -> Optional.of(new Response.Failure(errs));
-        var ex = assertThrows(
-                ExchangeErrorsException.class,
-                () -> transport.exchange(address, exchangeEndpoint, message, Message.class, TransportUtils.defaultOptions())
-        );
-        assertEquals(errs, ex.errors());
-        assertEquals(message, exchangeHandler.receivedMessage);
-    }
-
-    @Test
     void testExchangeMismatchedReturnType() throws Throwable {
         var mismatchedResp = List.of("Test error");
-        exchangeHandler.delegate = message -> Optional.of(new Response.Success(mismatchedResp));
+        exchangeHandler.delegate = message -> mismatchedResp;
         var ex = assertThrows(
                 MismatchedResponseTypeException.class,
                 () -> transport.exchange(address, exchangeEndpoint, message, Message.class, TransportUtils.defaultOptions())
@@ -180,19 +167,19 @@ class NettyTransportTest {
             throw new RuntimeException(exMessage);
         };
         var ex = assertThrows(
-                ExchangeErrorsException.class,
+                ExchangeErrorException.class,
                 () -> transport.exchange(address, exchangeEndpoint, message, Message.class, TransportUtils.defaultOptions())
         );
-        assertEquals(List.of(exMessage), ex.errors());
+        assertEquals(exMessage, ex.error());
     }
 
     @Test
     void testExchangeNoEndpoint() {
         var ex = assertThrows(
-                ExchangeErrorsException.class,
+                ExchangeErrorException.class,
                 () -> transport.exchange(address, "notThere", message, Message.class, TransportUtils.defaultOptions())
         );
-        assertEquals(List.of("No such endpoint: notThere"), ex.errors());
+        assertEquals("No such endpoint: notThere", ex.error());
     }
 
     @Test
@@ -201,10 +188,10 @@ class NettyTransportTest {
             throw new RuntimeException();
         };
         var ex = assertThrows(
-                ExchangeErrorsException.class,
+                ExchangeErrorException.class,
                 () -> transport.exchange(address, exchangeEndpoint, message, Message.class, TransportUtils.defaultOptions())
         );
-        assertEquals(List.of("Unspecified error"), ex.errors());
+        assertEquals("Unspecified error", ex.error());
     }
 
     @Test
@@ -214,8 +201,8 @@ class NettyTransportTest {
             sock.connect(new InetSocketAddress(addrUri.getHost(), addrUri.getPort()));
             ThreadUtils.sleepUnchecked(10000);
             var bytes = sock.getInputStream().readAllBytes();
-            var failureResp = objectMapper.readValue(bytes, Response.Failure.class);
-            assertEquals(List.of("Read timeout"), failureResp.errors());
+            var failureResp = objectMapper.readValue(bytes, ErrorResponse.class);
+            assertEquals("Read timeout", failureResp.error());
         }
     }
 
@@ -225,15 +212,15 @@ class NettyTransportTest {
         try(var transport = new NettyTransport(options)) {
             var address = transport.add(new UriAddress(new URI("tcp://localhost:0")));
             exchangeHandler.receivedMessage = null;
-            exchangeHandler.delegate = ignoredMessage -> Optional.of(new Response.Success(response));
+            exchangeHandler.delegate = ignoredMessage -> response;
             transport.add(exchangeEndpoint, exchangeHandler);
             try(var sock = new Socket()) {
                 var addrUri = address.asURI();
                 sock.connect(new InetSocketAddress(addrUri.getHost(), addrUri.getPort()));
                 ThreadUtils.sleepUnchecked(5000);
                 var bytes = sock.getInputStream().readAllBytes();
-                var failureResp = objectMapper.readValue(bytes, Response.Failure.class);
-                assertEquals(List.of("Read timeout"), failureResp.errors());
+                var failureResp = objectMapper.readValue(bytes, ErrorResponse.class);
+                assertEquals("Read timeout", failureResp.error());
             }
         }
     }
@@ -336,7 +323,7 @@ class NettyTransportTest {
         var channels = (Map<Address, ChannelFuture>) ReflectionTestUtils.getFieldValue(transport, "channels", Map.class);
         assertTrue(channels.isEmpty());
         @SuppressWarnings("unchecked") // Cast is to get around type erasure; should be fine unless we change backing impl.
-        var handlers = (Map<String, Handler<Object>>) ReflectionTestUtils.getFieldValue(transport, "handlers", Map.class);
+        var handlers = (Map<String, Handler<Object, Object>>) ReflectionTestUtils.getFieldValue(transport, "handlers", Map.class);
         assertTrue(handlers.isEmpty());
     }
 
