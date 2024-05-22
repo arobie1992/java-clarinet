@@ -5,9 +5,8 @@ import com.github.arobie1992.clarinet.core.ConnectionOptions;
 import com.github.arobie1992.clarinet.core.Node;
 import com.github.arobie1992.clarinet.core.Nodes;
 import com.github.arobie1992.clarinet.impl.inmemory.InMemoryPeerStore;
+import com.github.arobie1992.clarinet.impl.netty.NettyTransport;
 import com.github.arobie1992.clarinet.impl.peer.UriAddress;
-import com.github.arobie1992.clarinet.impl.tcp.TcpTransport;
-import com.github.arobie1992.clarinet.peer.Address;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.testutils.PeerUtils;
 import com.github.arobie1992.clarinet.testutils.TestConnection;
@@ -15,58 +14,44 @@ import com.github.arobie1992.clarinet.testutils.TransportUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Optional;
-import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.fail;
 
 class IntegrationTest {
 
-    private static final Logger log = LoggerFactory.getLogger(IntegrationTest.class);
-
-    private record Context(Node sender, Node witness, Node receiver) {}
-
-    private Context ctx;
+    private Node sender, witness, receiver;
 
     @BeforeEach
     void setUp() throws URISyntaxException {
-        final Node sender = Nodes.newBuilder().id(PeerUtils.senderId())
+        sender = Nodes.newBuilder().id(PeerUtils.senderId())
                 .peerStore(new InMemoryPeerStore())
-                .transport(new TcpTransport())
+                .transport(new NettyTransport())
                 .build();
-        final Node witness = Nodes.newBuilder().id(PeerUtils.witnessId())
+        witness = Nodes.newBuilder().id(PeerUtils.witnessId())
                 .peerStore(new InMemoryPeerStore())
-                .transport(new TcpTransport())
+                .transport(new NettyTransport())
                 .build();
-        final Node receiver = Nodes.newBuilder().id(PeerUtils.receiverId())
+        receiver = Nodes.newBuilder().id(PeerUtils.receiverId())
                 .peerStore(new InMemoryPeerStore())
-                .transport(new TcpTransport())
+                .transport(new NettyTransport())
                 .build();
         receiver.transport().add(new UriAddress(new URI("tcp://localhost:0")));
-        ctx = new Context(sender, witness, receiver);
     }
 
     @Test
     void testCooperative() throws Exception {
-        ctx.sender.peerStore().save(asPeer(ctx.receiver));
-        ctx.sender.peerStore().save(asPeer(ctx.witness));
-        var connectionId = ctx.sender.connect(ctx.receiver.id(), new ConnectionOptions(), TransportUtils.defaultOptions());
-        var expected = new TestConnection(
-                connectionId,
-                ctx.sender().id(),
-                Optional.of(ctx.witness.id()),
-                ctx.receiver.id(),
-                Connection.Status.OPEN
-        );
-        verifyConnectionPresent(expected, ctx.sender);
-        verifyConnectionPresent(expected, ctx.witness);
-        verifyConnectionPresent(expected, ctx.receiver);
+        sender.peerStore().save(asPeer(receiver));
+        sender.peerStore().save(asPeer(witness));
+        var connectionId = sender.connect(receiver.id(), new ConnectionOptions(), TransportUtils.defaultOptions());
+        var expected = new TestConnection(connectionId, sender.id(), Optional.of(witness.id()), receiver.id(), Connection.Status.OPEN);
+        verifyConnectionPresent(expected, sender);
+        verifyConnectionPresent(expected, witness);
+        verifyConnectionPresent(expected, receiver);
         fail("Test sending messages, reputation, and querying");
     }
 
@@ -147,16 +132,9 @@ class IntegrationTest {
 
     @AfterEach
     void teardown() {
-        Consumer<Address> closeAddr = a -> {
-            try {
-                ctx.sender.transport().remove(a);
-            } catch(Exception e) {
-                log.warn("Failed to close address: {}", a, e);
-            }
-        };
-        ctx.sender.transport().addresses().forEach(closeAddr);
-        ctx.witness.transport().addresses().forEach(closeAddr);
-        ctx.receiver.transport().addresses().forEach(closeAddr);
+        ((NettyTransport) sender.transport()).close();
+        ((NettyTransport) witness.transport()).close();
+        ((NettyTransport) receiver.transport()).close();
     }
 
     private Peer asPeer(Node node) {
