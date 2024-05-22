@@ -10,7 +10,6 @@ public record StringPeerId(String value) implements PeerId {
         return value;
     }
 
-    // TODO Probably going to come back to these parse functions to see if this setup is actually useful
     @Override
     public Function<String, PeerId> parseFunction() {
         return StringPeerId::new;
