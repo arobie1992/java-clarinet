@@ -7,6 +7,7 @@ import com.github.arobie1992.clarinet.transport.Handler;
 import com.github.arobie1992.clarinet.transport.Message;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.handler.timeout.ReadTimeoutException;
 
 import java.util.List;
 import java.util.Map;
@@ -49,7 +50,11 @@ class HandlerDispatcher extends ChannelInboundHandlerAdapter {
     // If this changes, will have to revisit
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws JsonProcessingException {
-        writeResponse(ctx, new Response.Failure(List.of(cause.getMessage())));
+        var message = cause.getMessage();
+        if(message == null && cause instanceof ReadTimeoutException) {
+            message = "Read timeout";
+        }
+        writeResponse(ctx, new Response.Failure(List.of(message == null ? "Unspecified error" : message)));
         ctx.close();
     }
 

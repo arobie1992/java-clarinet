@@ -14,7 +14,10 @@ import io.netty.channel.EventLoopGroup;
 import lombok.Lombok;
 import org.junit.jupiter.api.*;
 
+import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
@@ -48,7 +51,7 @@ class NettyTransportTest {
     }
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final NettyTransport transport = new NettyTransport();
+    private final NettyTransport transport = new NettyTransport(TransportUtils.defaultOptions());
     private final Message message = new Message("message");
     private final Message response = new Message("response");
     private final String exchangeEndpoint = "exchange";
@@ -190,6 +193,49 @@ class NettyTransportTest {
                 () -> transport.exchange(address, "notThere", message, Message.class, TransportUtils.defaultOptions())
         );
         assertEquals(List.of("No such endpoint: notThere"), ex.errors());
+    }
+
+    @Test
+    void testExchangeHandlerThrowsNoMessage() {
+        exchangeHandler.delegate = message -> {
+            throw new RuntimeException();
+        };
+        var ex = assertThrows(
+                ExchangeErrorsException.class,
+                () -> transport.exchange(address, exchangeEndpoint, message, Message.class, TransportUtils.defaultOptions())
+        );
+        assertEquals(List.of("Unspecified error"), ex.errors());
+    }
+
+    @Test
+    void testHandlerDefaultReceiveTimeout() throws IOException {
+        try(var sock = new Socket()) {
+            var addrUri = address.asURI();
+            sock.connect(new InetSocketAddress(addrUri.getHost(), addrUri.getPort()));
+            ThreadUtils.sleepUnchecked(10000);
+            var bytes = sock.getInputStream().readAllBytes();
+            var failureResp = objectMapper.readValue(bytes, Response.Failure.class);
+            assertEquals(List.of("Read timeout"), failureResp.errors());
+        }
+    }
+
+    @Test
+    void testHandlerReceiveTimeout() throws IOException, URISyntaxException {
+        var options = new TransportOptions(Optional.empty(), Optional.of(Duration.ofSeconds(5)));
+        try(var transport = new NettyTransport(options)) {
+            var address = transport.add(new UriAddress(new URI("tcp://localhost:0")));
+            exchangeHandler.receivedMessage = null;
+            exchangeHandler.delegate = ignoredMessage -> Optional.of(new Response.Success(response));
+            transport.add(exchangeEndpoint, exchangeHandler);
+            try(var sock = new Socket()) {
+                var addrUri = address.asURI();
+                sock.connect(new InetSocketAddress(addrUri.getHost(), addrUri.getPort()));
+                ThreadUtils.sleepUnchecked(5000);
+                var bytes = sock.getInputStream().readAllBytes();
+                var failureResp = objectMapper.readValue(bytes, Response.Failure.class);
+                assertEquals(List.of("Read timeout"), failureResp.errors());
+            }
+        }
     }
 
     /*

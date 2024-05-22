@@ -30,15 +30,15 @@ class IntegrationTest {
     void setUp() throws URISyntaxException {
         sender = Nodes.newBuilder().id(PeerUtils.senderId())
                 .peerStore(new InMemoryPeerStore())
-                .transport(new NettyTransport())
+                .transport(new NettyTransport(TransportUtils.defaultOptions()))
                 .build();
         witness = Nodes.newBuilder().id(PeerUtils.witnessId())
                 .peerStore(new InMemoryPeerStore())
-                .transport(new NettyTransport())
+                .transport(new NettyTransport(TransportUtils.defaultOptions()))
                 .build();
         receiver = Nodes.newBuilder().id(PeerUtils.receiverId())
                 .peerStore(new InMemoryPeerStore())
-                .transport(new NettyTransport())
+                .transport(new NettyTransport(TransportUtils.defaultOptions()))
                 .build();
         receiver.transport().add(new UriAddress(new URI("tcp://localhost:0")));
     }

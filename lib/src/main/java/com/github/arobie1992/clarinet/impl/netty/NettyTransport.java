@@ -11,6 +11,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.json.JsonObjectDecoder;
+import io.netty.handler.timeout.ReadTimeoutHandler;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 public class NettyTransport implements Transport, AutoCloseable {
 
@@ -31,17 +33,28 @@ public class NettyTransport implements Transport, AutoCloseable {
     private final Map<String, Handler<Object>> handlers = new ConcurrentHashMap<>();
     private final EventLoopGroup bossGroup = new NioEventLoopGroup();
     private final EventLoopGroup workerGroup = new NioEventLoopGroup();
-    private final ServerBootstrap serverBootstrap = new ServerBootstrap().group(bossGroup, workerGroup)
-            .channel(NioServerSocketChannel.class)
-            .childHandler(new ChannelInitializer<SocketChannel>() {
-                @Override
-                protected void initChannel(@SuppressWarnings("NullableProblems") SocketChannel socketChannel) {
-                    socketChannel.pipeline().addLast(new JsonObjectDecoder(), new MessageDecoder(), new HandlerDispatcher(handlers));
-                }
-            })
-            .option(ChannelOption.SO_BACKLOG, 128)
-            .childOption(ChannelOption.SO_KEEPALIVE, true);
+    private final ServerBootstrap serverBootstrap;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public NettyTransport(TransportOptions transportOptions) {
+        var handlerReceiveTimeout = timeoutMillis(transportOptions.receiveTimeout());
+        serverBootstrap = new ServerBootstrap().group(bossGroup, workerGroup)
+                .channel(NioServerSocketChannel.class)
+                .childHandler(new ChannelInitializer<SocketChannel>() {
+                    @Override
+                    protected void initChannel(@SuppressWarnings("NullableProblems") SocketChannel socketChannel) {
+                        socketChannel.pipeline().addLast(
+                                new JsonObjectDecoder(),
+                                new MessageDecoder(),
+                                // read timeout goes first so HandlerDispatcher's error handler will trigger
+                                new ReadTimeoutHandler(handlerReceiveTimeout, TimeUnit.MILLISECONDS),
+                                new HandlerDispatcher(handlers)
+                        );
+                    }
+                })
+                .option(ChannelOption.SO_BACKLOG, 128)
+                .childOption(ChannelOption.SO_KEEPALIVE, true);
+    }
 
     private URI validateAddress(Address address) {
         var uri = address.asURI();
@@ -53,7 +66,7 @@ public class NettyTransport implements Transport, AutoCloseable {
 
     // The entire point of the method is convenience for unwrapping the optional
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
-    private int timeoutMillis(Optional<Duration> timeout) {
+    private static int timeoutMillis(Optional<Duration> timeout) {
         var duration = timeout.orElse(Duration.ofSeconds(10));
         return Math.toIntExact(duration.toMillis());
     }
