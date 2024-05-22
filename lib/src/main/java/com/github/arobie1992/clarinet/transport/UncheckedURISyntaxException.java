@@ -1,4 +1,4 @@
-package com.github.arobie1992.clarinet.impl.tcp;
+package com.github.arobie1992.clarinet.transport;
 
 import java.net.URISyntaxException;
 

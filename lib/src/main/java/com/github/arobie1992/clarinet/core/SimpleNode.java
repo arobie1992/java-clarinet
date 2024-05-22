@@ -50,9 +50,11 @@ class SimpleNode implements Node {
         var peer = peerStore.find(receiver).orElseThrow(() -> new NoSuchPeerException(receiver));
         ConnectResponse ignoredForNow = peer.addresses().stream().map(addr -> {
             try {
-                return transport.exchange(addr, new ConnectRequest(), ConnectResponse.class, transportOptions);
+                return transport.exchange(addr, "connect", new ConnectRequest(), ConnectResponse.class, transportOptions);
             } catch(RuntimeException e) {
                 // TODO decide if it's worth signaling this back to the caller
+                // I think I'm going to do this through an error handler
+                // input will be the address and the exception
                 log.warn("Encountered error while trying to request connection to peer {} at address {}", receiver, addr, e);
                 return null;
             }

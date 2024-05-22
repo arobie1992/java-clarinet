@@ -18,6 +18,7 @@ repositories {
 dependencies {
     implementation("org.slf4j:slf4j-api:2.0.13")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.17.1")
+    implementation("io.netty:netty-all:4.1.109.Final")
 
     testImplementation(libs.junit.jupiter)
     testImplementation("org.mockito:mockito-core:5.12.0")
