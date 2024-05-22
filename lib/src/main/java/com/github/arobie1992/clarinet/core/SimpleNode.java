@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
+import java.util.function.Supplier;
 
 class SimpleNode implements Node {
 
@@ -21,7 +22,7 @@ class SimpleNode implements Node {
     private SimpleNode(Builder builder) {
         this.id = Objects.requireNonNull(builder.id);
         this.peerStore = Objects.requireNonNull(builder.peerStore);
-        this.transport = Objects.requireNonNull(builder.transport);
+        this.transport = Objects.requireNonNull(builder.transportFactory.get());
     }
 
     @Override
@@ -50,7 +51,7 @@ class SimpleNode implements Node {
         var peer = peerStore.find(receiver).orElseThrow(() -> new NoSuchPeerException(receiver));
         ConnectResponse ignoredForNow = peer.addresses().stream().map(addr -> {
             try {
-                return transport.exchange(addr, "connect", new ConnectRequest(), ConnectResponse.class, transportOptions);
+                return transport.exchange(addr, Endpoints.CONNECT.name(), new ConnectRequest(), ConnectResponse.class, transportOptions);
             } catch(RuntimeException e) {
                 // TODO decide if it's worth signaling this back to the caller
                 // I think I'm going to do this through an error handler
@@ -76,7 +77,7 @@ class SimpleNode implements Node {
     static class Builder implements NodeBuilder {
         private PeerId id;
         private PeerStore peerStore;
-        private Transport transport;
+        private Supplier<Transport> transportFactory;
 
         @Override
         public NodeBuilder id(PeerId id) {
@@ -91,8 +92,8 @@ class SimpleNode implements Node {
         }
 
         @Override
-        public NodeBuilder transport(Transport transport) {
-            this.transport = transport;
+        public NodeBuilder transport(Supplier<Transport> transportFactory) {
+            this.transportFactory = transportFactory;
             return this;
         }
 
