@@ -1,6 +1,7 @@
 package com.github.arobie1992.clarinet.impl.netty;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.github.arobie1992.clarinet.impl.peer.UriAddress;
 import com.github.arobie1992.clarinet.peer.Address;
 import com.github.arobie1992.clarinet.testutils.ReflectionTestUtils;
@@ -36,10 +37,12 @@ class NettyTransportTest {
     private record Message(String contents) {}
     private static class TestHandler implements Handler<Message, Object> {
         Function<Message, Object> delegate;
+        private Address remoteAddress;
         private Message receivedMessage;
 
         @Override
-        public Object handle(Message message) {
+        public Object handle(Address remoteAddress, Message message) {
+            this.remoteAddress = remoteAddress;
             receivedMessage = message;
             return delegate.apply(message);
         }
@@ -58,9 +61,14 @@ class NettyTransportTest {
 
     private Address address;
 
+    NettyTransportTest() {
+        objectMapper.registerModule(new Jdk8Module());
+    }
+
     @BeforeEach
     void setUp() throws URISyntaxException {
         address = transport.add(new UriAddress(new URI("tcp://localhost:0")));
+        exchangeHandler.remoteAddress = null;
         exchangeHandler.receivedMessage = null;
         exchangeHandler.delegate = ignoredMessage -> response;
         transport.add(exchangeEndpoint, exchangeHandler);
@@ -112,6 +120,21 @@ class NettyTransportTest {
         assertEquals(objectMapper.writeValueAsString(mismatchedResp), ex.response());
         assertEquals(Message.class, ex.responseType());
         assertEquals(message, exchangeHandler.receivedMessage);
+    }
+
+    @Test
+    void testHandlerGetsAddress() throws IOException, URISyntaxException {
+        var addrUri = address.asURI();
+        try(var sock = new Socket()) {
+            sock.connect(new InetSocketAddress(addrUri.getHost(), addrUri.getPort()), 1000);
+            var out = sock.getOutputStream();
+            out.write(objectMapper.writeValueAsBytes(new com.github.arobie1992.clarinet.transport.Message(exchangeEndpoint, message)));
+            sock.setSoTimeout(1000);
+            var bytes = sock.getInputStream().readAllBytes();
+            assertEquals(response, objectMapper.readValue(bytes, Message.class));
+            var expectedAddress = new UriAddress(new URI("tcp://" + sock.getLocalAddress().getHostName() + ":" + sock.getLocalPort()));
+            assertEquals(expectedAddress, exchangeHandler.remoteAddress);
+        }
     }
 
     // TODO figure out how to test send timeouts
@@ -211,7 +234,6 @@ class NettyTransportTest {
         var options = new TransportOptions(Optional.empty(), Optional.of(Duration.ofSeconds(5)));
         try(var transport = new NettyTransport(options)) {
             var address = transport.add(new UriAddress(new URI("tcp://localhost:0")));
-            exchangeHandler.receivedMessage = null;
             exchangeHandler.delegate = ignoredMessage -> response;
             transport.add(exchangeEndpoint, exchangeHandler);
             try(var sock = new Socket()) {

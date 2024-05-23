@@ -2,6 +2,7 @@ package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
+import com.github.arobie1992.clarinet.transport.Handler;
 import com.github.arobie1992.clarinet.transport.Transport;
 import com.github.arobie1992.clarinet.transport.TransportOptions;
 
@@ -27,4 +28,8 @@ public interface Node {
      * @return the {@link ConnectionId} of the newly created connection.
      */
     ConnectionId connect(PeerId receiver, ConnectionOptions connectionOptions, TransportOptions transportOptions);
+
+    void addConnectHandler(Handler<ConnectRequest, ConnectResponse> connectHandler);
+
+    void removeConnectHandler();
 }

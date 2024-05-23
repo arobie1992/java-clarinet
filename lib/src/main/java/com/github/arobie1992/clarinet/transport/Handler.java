@@ -1,5 +1,7 @@
 package com.github.arobie1992.clarinet.transport;
 
+import com.github.arobie1992.clarinet.peer.Address;
+
 public interface Handler<I, O> {
     /**
      * Process the incoming message and return the response to send.
@@ -8,6 +10,6 @@ public interface Handler<I, O> {
      * @param message The incoming message.
      * @return The response to send.
      */
-    O handle(I message);
+    O handle(Address remoteAddress, I message);
     Class<I> inputType();
 }

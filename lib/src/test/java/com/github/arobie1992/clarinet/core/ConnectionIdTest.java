@@ -2,17 +2,17 @@ package com.github.arobie1992.clarinet.core;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.UUID;
-
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 class ConnectionIdTest {
 
     private final ConnectionId connectionId = ConnectionId.random();
-    private final ConnectionId matching = new ConnectionId(UUID.fromString(connectionId.toString()));
+    private final ConnectionId matching = ConnectionId.fromString(connectionId.toString());
 
     @Test
     void testEqualsAndHashCodeReflexive() {
+        //noinspection EqualsWithItself
         assertEquals(connectionId, connectionId);
         assertEquals(connectionId.hashCode(), connectionId.hashCode());
     }
@@ -26,7 +26,7 @@ class ConnectionIdTest {
 
     @Test
     void testEqualsAndHashCodeTransitive() {
-        var matching2 = new ConnectionId(UUID.fromString(connectionId.toString()));
+        var matching2 = ConnectionId.fromString(connectionId.toString());
 
         assertEquals(connectionId, matching);
         assertEquals(matching, matching2);

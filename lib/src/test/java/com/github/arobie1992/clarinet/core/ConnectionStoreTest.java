@@ -37,6 +37,28 @@ class ConnectionStoreTest {
     }
 
     @Test
+    void testAcceptCollision() {
+        assertThrows(
+                ExistingConnectionIdException.class,
+                () -> connectionStore.accept(connectionId, PeerUtils.senderId(), PeerUtils.receiverId(), Connection.Status.OPEN)
+        );
+    }
+
+    @Test
+    void testAccept() throws Exception {
+        var connectionId = ConnectionId.random();
+        connectionStore.accept(connectionId, PeerUtils.senderId(), PeerUtils.receiverId(), Connection.Status.OPEN);
+        try(var ref = connectionStore.findForRead(connectionId)) {
+            if (ref instanceof Connection.Readable(Connection connection)) {
+                new TestConnection(connectionId, PeerUtils.senderId(), Optional.empty(), PeerUtils.receiverId(), Connection.Status.OPEN)
+                        .assertMatches(connection);
+            } else {
+                fail("Was expecting ConnectionStore.Readable but got " + ref.getClass());
+            }
+        }
+    }
+
+    @Test
     void testFindForReadAbsent() throws Exception {
         try(var ref = connectionStore.findForRead(ConnectionId.random())) {
             assertEquals(Connection.Absent.class, ref.getClass());
@@ -44,7 +66,7 @@ class ConnectionStoreTest {
     }
 
     @Test
-    void testCreate() throws Exception {
+    void testFindForRead() throws Exception {
         try(var ref = connectionStore.findForRead(connectionId)) {
             if (ref instanceof Connection.Readable(Connection connection)) {
                 new TestConnection(connectionId, PeerUtils.senderId(), Optional.empty(), PeerUtils.receiverId(), Connection.Status.OPEN)

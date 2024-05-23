@@ -2,6 +2,7 @@ package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
+import com.github.arobie1992.clarinet.transport.Handler;
 import com.github.arobie1992.clarinet.transport.Transport;
 
 import java.util.function.Supplier;
@@ -20,5 +21,16 @@ public interface NodeBuilder {
      * @return {@code this} builder for fluent building.
      */
     NodeBuilder transport(Supplier<Transport> transportFactory);
+
+    /**
+     * User-defined behavior for determining whether to accept a connection.
+     * <p>
+     * The returned {@code ConnectResponse} is used to determine if the node should create the connection or not. Users
+     * do not need to perform any of these operations themselves. <b>This field is optional; however, if not specified,
+     * all connections are accepted.</b>
+     * @param connectHandler The handler implementing the user-desired behavior.
+     * @return {@code this} builder for fluent building.
+     */
+    NodeBuilder connectHandler(Handler<ConnectRequest, ConnectResponse> connectHandler);
     Node build();
 }

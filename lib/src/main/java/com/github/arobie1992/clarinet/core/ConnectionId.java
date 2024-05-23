@@ -6,12 +6,16 @@ import java.util.UUID;
 public class ConnectionId {
     private final UUID id;
 
-    ConnectionId(UUID id) {
+    private ConnectionId(UUID id) {
         this.id = id;
     }
 
     static ConnectionId random() {
         return new ConnectionId(UUID.randomUUID());
+    }
+
+    public static ConnectionId fromString(String id) {
+        return new ConnectionId(UUID.fromString(id));
     }
 
     @Override

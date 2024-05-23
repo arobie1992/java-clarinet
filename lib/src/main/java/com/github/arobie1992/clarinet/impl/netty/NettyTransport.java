@@ -2,10 +2,17 @@ package com.github.arobie1992.clarinet.impl.netty;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.arobie1992.clarinet.transport.*;
+import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.github.arobie1992.clarinet.core.ConnectionId;
 import com.github.arobie1992.clarinet.peer.Address;
+import com.github.arobie1992.clarinet.peer.PeerId;
+import com.github.arobie1992.clarinet.transport.*;
 import io.netty.bootstrap.ServerBootstrap;
-import io.netty.channel.*;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -53,6 +60,11 @@ public class NettyTransport implements Transport, AutoCloseable {
                 })
                 .option(ChannelOption.SO_BACKLOG, 128)
                 .childOption(ChannelOption.SO_KEEPALIVE, true);
+        var module = new SimpleModule();
+        module.addSerializer(PeerId.class, new PeerIdSerializer());
+        module.addSerializer(ConnectionId.class, new ConnectionIdSerializer());
+        objectMapper.registerModule(module);
+        objectMapper.registerModule(new Jdk8Module());
     }
 
     private URI validateAddress(Address address) {

@@ -1,6 +1,7 @@
 package com.github.arobie1992.clarinet.impl.netty;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.github.arobie1992.clarinet.transport.Message;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
@@ -11,6 +12,9 @@ import java.util.List;
 
 public class MessageDecoder extends ByteToMessageDecoder {
     private final ObjectMapper objectMapper = new ObjectMapper();
+    public MessageDecoder() {
+        objectMapper.registerModule(new Jdk8Module());
+    }
     @Override
     protected void decode(ChannelHandlerContext channelHandlerContext, ByteBuf byteBuf, List<Object> list) throws IOException {
         var buff = new byte[byteBuf.readableBytes()];
