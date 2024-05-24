@@ -1,7 +1,10 @@
 package com.github.arobie1992.clarinet.core;
 
+import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
+import com.github.arobie1992.clarinet.reputation.Reputation;
+import com.github.arobie1992.clarinet.reputation.ReputationStore;
 import com.github.arobie1992.clarinet.transport.Handler;
 import com.github.arobie1992.clarinet.transport.Transport;
 import com.github.arobie1992.clarinet.transport.TransportOptions;
@@ -9,7 +12,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 class SimpleNode implements Node {
 
@@ -19,12 +26,16 @@ class SimpleNode implements Node {
     private final PeerStore peerStore;
     private final ConnectionStore connectionStore = new ConnectionStore();
     private final TransportProxy transport;
+    private final Function<Stream<? extends Reputation>, Stream<PeerId>> trustFilter;
+    private final ReputationStore reputationStore;
 
     private SimpleNode(Builder builder) {
         this.id = Objects.requireNonNull(builder.id);
         this.peerStore = Objects.requireNonNull(builder.peerStore);
         this.transport = new TransportProxy(Objects.requireNonNull(builder.transportFactory.get()));
         this.transport.addInternal(Endpoints.CONNECT.name(), new ConnectHandlerProxy(builder.connectHandler, connectionStore, this));
+        this.trustFilter = Objects.requireNonNull(builder.trustFilter);
+        this.reputationStore = Objects.requireNonNull(builder.reputationStore);
     }
 
     @Override
@@ -47,24 +58,65 @@ class SimpleNode implements Node {
         return connectionStore.findForRead(connectionId);
     }
 
-    @Override
-    public ConnectionId connect(PeerId receiver, ConnectionOptions connectionOptions, TransportOptions transportOptions) {
-        var connectionId = connectionStore.create(id(), receiver, Connection.Status.REQUESTING_RECEIVER);
-        var peer = peerStore.find(receiver).orElseThrow(() -> new NoSuchPeerException(receiver));
-        ConnectResponse connectResponse = peer.addresses().stream().map(addr -> {
+    private <T> Stream<T> exchangeForPeer(
+            Peer peer,
+            String endpoint,
+            Object request,
+            Class<T> responseType,
+            TransportOptions transportOptions
+    ) {
+        return peer.addresses().stream().map(addr -> {
             try {
-                var request = new ConnectRequest(connectionId, id());
-                return transport.exchange(addr, Endpoints.CONNECT.name(), request, ConnectResponse.class, transportOptions);
+                return transport.exchange(addr, endpoint, request, responseType, transportOptions);
             } catch(RuntimeException e) {
                 // TODO decide if it's worth signaling this back to the caller
                 // I think I'm going to do this through an error handler
                 // input will be the address and the exception
-                log.warn("Encountered error while trying to request connection to peer {} at address {}", receiver, addr, e);
+                log.warn("Encountered error while sending exchange to peer {} at address {} for endpoint {}", peer, addr, endpoint, e);
                 return null;
             }
-        }).filter(Objects::nonNull).findFirst().orElseThrow(ConnectFailureException::new);
+        }).filter(Objects::nonNull);
+    }
 
-        var witness = peerStore.all().findFirst().orElseThrow();
+    @Override
+    public ConnectionId connect(PeerId receiver, ConnectionOptions connectionOptions, TransportOptions transportOptions) {
+        var connectionId = connectionStore.create(id(), receiver, Connection.Status.REQUESTING_RECEIVER);
+        var peer = peerStore.find(receiver).orElseThrow(() -> new NoSuchPeerException(receiver));
+        ConnectResponse connectResponse = exchangeForPeer(
+                peer,
+                Endpoints.CONNECT.name(),
+                new ConnectRequest(connectionId, id()),
+                ConnectResponse.class,
+                transportOptions
+        ).findFirst().orElseThrow(ConnectFailureException::new);
+
+        if(connectResponse.rejected()) {
+            throw new ConnectRejectedException(connectResponse.reason());
+        }
+
+        record PeerAndResponse(Peer peer, WitnessResponse witnessResponse) {}
+        Predicate<PeerAndResponse> byRejected = par -> {
+            if(par.witnessResponse.rejected()) {
+                // see about adding a handler here as well
+                log.info("Witness {} rejected due to reason: {}", par.peer.id(), par.witnessResponse.reason());
+                return false;
+            } else {
+                return true;
+            }
+        };
+
+        var witness = trustFilter.apply(reputationStore.findAll(peerStore.all()))
+                .map(peerStore::find)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(p -> exchangeForPeer(p, Endpoints.WITNESS.name(), new WitnessRequest(), WitnessResponse.class, transportOptions)
+                        .map(wr -> new PeerAndResponse(p, wr)))
+                .flatMap(r -> r.filter(par -> par.witnessResponse != null))
+                .filter(byRejected)
+                .map(par -> par.peer)
+                .findFirst()
+                .orElseThrow(WitnessSelectionException::new);
+
         try(var ref = connectionStore.findForWrite(connectionId)) {
             if(!(ref instanceof Writeable(ConnectionImpl connection))) {
                 throw new RuntimeException("Connect attempt failed");
@@ -92,6 +144,8 @@ class SimpleNode implements Node {
         private PeerStore peerStore;
         private Supplier<Transport> transportFactory;
         private Handler<ConnectRequest, ConnectResponse> connectHandler;
+        private Function<Stream<? extends Reputation>, Stream<PeerId>> trustFilter;
+        private ReputationStore reputationStore;
 
         @Override
         public NodeBuilder id(PeerId id) {
@@ -114,6 +168,18 @@ class SimpleNode implements Node {
         @Override
         public NodeBuilder connectHandler(Handler<ConnectRequest, ConnectResponse> connectHandler) {
             this.connectHandler = connectHandler;
+            return this;
+        }
+
+        @Override
+        public NodeBuilder trustFilter(Function<Stream<? extends Reputation>, Stream<PeerId>> trustFunction) {
+            this.trustFilter = trustFunction;
+            return this;
+        }
+
+        @Override
+        public NodeBuilder reputationStore(ReputationStore reputationStore) {
+            this.reputationStore = reputationStore;
             return this;
         }
 

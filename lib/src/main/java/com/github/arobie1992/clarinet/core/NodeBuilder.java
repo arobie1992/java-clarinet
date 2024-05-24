@@ -2,10 +2,14 @@ package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
+import com.github.arobie1992.clarinet.reputation.Reputation;
+import com.github.arobie1992.clarinet.reputation.ReputationStore;
 import com.github.arobie1992.clarinet.transport.Handler;
 import com.github.arobie1992.clarinet.transport.Transport;
 
+import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 public interface NodeBuilder {
     NodeBuilder id(PeerId id);
@@ -32,5 +36,7 @@ public interface NodeBuilder {
      * @return {@code this} builder for fluent building.
      */
     NodeBuilder connectHandler(Handler<ConnectRequest, ConnectResponse> connectHandler);
+    NodeBuilder trustFilter(Function<Stream<? extends Reputation>, Stream<PeerId>> trustFunction);
+    NodeBuilder reputationStore(ReputationStore reputationStore);
     Node build();
 }

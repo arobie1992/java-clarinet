@@ -1,7 +1,8 @@
 package com.github.arobie1992.clarinet.core;
 
 public enum Endpoints {
-    CONNECT;
+    CONNECT,
+    WITNESS;
 
     static boolean isEndpoint(String endpoint) {
         for (Endpoints e : Endpoints.values()) {

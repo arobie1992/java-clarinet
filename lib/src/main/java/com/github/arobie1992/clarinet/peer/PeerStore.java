@@ -24,5 +24,5 @@ public interface PeerStore {
      * returned from this stream are not persisted to the underlying storage unless they are saved.
      * @return A {@link Stream} of the {@link Peer}s.
      */
-    Stream<Peer> all();
+    Stream<PeerId> all();
 }

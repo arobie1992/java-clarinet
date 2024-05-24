@@ -5,9 +5,12 @@ import com.github.arobie1992.clarinet.core.ConnectionOptions;
 import com.github.arobie1992.clarinet.core.Node;
 import com.github.arobie1992.clarinet.core.Nodes;
 import com.github.arobie1992.clarinet.impl.inmemory.InMemoryPeerStore;
+import com.github.arobie1992.clarinet.impl.inmemory.InMemoryReputationStore;
 import com.github.arobie1992.clarinet.impl.netty.NettyTransport;
 import com.github.arobie1992.clarinet.impl.peer.UriAddress;
+import com.github.arobie1992.clarinet.impl.reputation.ProportionalReputation;
 import com.github.arobie1992.clarinet.peer.Peer;
+import com.github.arobie1992.clarinet.reputation.TrustFilters;
 import com.github.arobie1992.clarinet.testutils.PeerUtils;
 import com.github.arobie1992.clarinet.testutils.TestConnection;
 import com.github.arobie1992.clarinet.testutils.TransportUtils;
@@ -31,14 +34,20 @@ class IntegrationTest {
         sender = Nodes.newBuilder().id(PeerUtils.senderId())
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(TransportUtils.defaultOptions()))
+                .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
+                .reputationStore(new InMemoryReputationStore(ProportionalReputation::new))
                 .build();
         witness = Nodes.newBuilder().id(PeerUtils.witnessId())
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(TransportUtils.defaultOptions()))
+                .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
+                .reputationStore(new InMemoryReputationStore(ProportionalReputation::new))
                 .build();
         receiver = Nodes.newBuilder().id(PeerUtils.receiverId())
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(TransportUtils.defaultOptions()))
+                .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
+                .reputationStore(new InMemoryReputationStore(ProportionalReputation::new))
                 .build();
         receiver.transport().add(new UriAddress(new URI("tcp://localhost:0")));
     }

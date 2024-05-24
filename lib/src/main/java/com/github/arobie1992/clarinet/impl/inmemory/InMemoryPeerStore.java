@@ -28,8 +28,8 @@ public class InMemoryPeerStore implements PeerStore {
     }
 
     @Override
-    public Stream<Peer> all() {
-        return peers.values().stream().map(InMemoryPeerStore::copy);
+    public Stream<PeerId> all() {
+        return peers.values().stream().map(Peer::id);
     }
 
     private static Peer copy(Peer peer) {
