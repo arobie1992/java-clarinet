@@ -13,4 +13,5 @@ public interface Transport {
     Optional<Handler<?, ?>> remove(String endpoint);
     Collection<String> endpoints();
     <T> T exchange(Address address, String endpoint, Object message, Class<T> responseType, TransportOptions options);
+    void shutdown();
 }

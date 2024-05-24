@@ -15,7 +15,10 @@ public sealed interface Connection permits ConnectionImpl {
      * {@code Reference} allows access to a {@link Connection} and performs any necessary unlocking in its
      * {@link Reference#close()} method.
      */
-    sealed interface Reference extends AutoCloseable permits ReadableReference, WriteableReference {}
+    sealed interface Reference extends AutoCloseable permits ReadableReference, WriteableReference {
+        // get rid of need to deal with checked exceptions since we don't potentially throw any
+        @Override void close();
+    }
     sealed interface ReadableReference extends Reference {}
 
     record Readable(Connection connection) implements ReadableReference {

@@ -174,6 +174,11 @@ public class NettyTransport implements Transport, AutoCloseable {
     }
 
     @Override
+    public void shutdown() {
+        close();
+    }
+
+    @Override
     public void close() {
         /*
          Looks like netty handles shutting down the channels:

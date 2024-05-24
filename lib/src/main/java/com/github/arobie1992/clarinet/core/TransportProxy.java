@@ -59,4 +59,9 @@ class TransportProxy implements Transport {
     public <T> T exchange(Address address, String endpoint, Object message, Class<T> responseType, TransportOptions options) {
         return transport.exchange(address, endpoint, message, responseType, options);
     }
+
+    @Override
+    public void shutdown() {
+        transport.shutdown();
+    }
 }

@@ -34,6 +34,7 @@ class SimpleNode implements Node {
         this.peerStore = Objects.requireNonNull(builder.peerStore);
         this.transport = new TransportProxy(Objects.requireNonNull(builder.transportFactory.get()));
         this.transport.addInternal(Endpoints.CONNECT.name(), new ConnectHandlerProxy(builder.connectHandler, connectionStore, this));
+        this.transport.addInternal(Endpoints.WITNESS.name(), new WitnessHandlerProxy(builder.witnessHandler, connectionStore, this));
         this.trustFilter = Objects.requireNonNull(builder.trustFilter);
         this.reputationStore = Objects.requireNonNull(builder.reputationStore);
     }
@@ -105,11 +106,14 @@ class SimpleNode implements Node {
             }
         };
 
-        var witness = trustFilter.apply(reputationStore.findAll(peerStore.all()))
-                .map(peerStore::find)
+        var witness = trustFilter.apply(reputationStore.findAll(
+                // filter out this node itself and the receiver
+                peerStore.all().filter(pid -> !id.equals(pid) && !receiver.equals(pid)))
+                ).map(peerStore::find)
                 .filter(Optional::isPresent)
                 .map(Optional::get)
-                .map(p -> exchangeForPeer(p, Endpoints.WITNESS.name(), new WitnessRequest(), WitnessResponse.class, transportOptions)
+                .map(p -> exchangeForPeer(
+                        p, Endpoints.WITNESS.name(), new WitnessRequest(connectionId, id(), receiver), WitnessResponse.class, transportOptions)
                         .map(wr -> new PeerAndResponse(p, wr)))
                 .flatMap(r -> r.filter(par -> par.witnessResponse != null))
                 .filter(byRejected)
@@ -122,10 +126,11 @@ class SimpleNode implements Node {
                 throw new RuntimeException("Connect attempt failed");
             }
             connection.setWitness(witness.id());
-            connection.setStatus(Connection.Status.OPEN);
+            connection.setStatus(Connection.Status.NOTIFYING_OF_WITNESS);
         } catch(Exception e) {
             throw new RuntimeException(e);
         }
+
         return connectionId;
     }
 
@@ -146,6 +151,7 @@ class SimpleNode implements Node {
         private Handler<ConnectRequest, ConnectResponse> connectHandler;
         private Function<Stream<? extends Reputation>, Stream<PeerId>> trustFilter;
         private ReputationStore reputationStore;
+        private Handler<WitnessRequest, WitnessResponse> witnessHandler;
 
         @Override
         public NodeBuilder id(PeerId id) {
@@ -180,6 +186,12 @@ class SimpleNode implements Node {
         @Override
         public NodeBuilder reputationStore(ReputationStore reputationStore) {
             this.reputationStore = reputationStore;
+            return this;
+        }
+
+        @Override
+        public NodeBuilder witnessHandler(Handler<WitnessRequest, WitnessResponse> witnessHandler) {
+            this.witnessHandler = witnessHandler;
             return this;
         }
 

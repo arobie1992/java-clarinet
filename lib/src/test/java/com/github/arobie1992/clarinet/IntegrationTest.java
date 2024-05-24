@@ -43,6 +43,7 @@ class IntegrationTest {
                 .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
                 .reputationStore(new InMemoryReputationStore(ProportionalReputation::new))
                 .build();
+        witness.transport().add(new UriAddress(new URI("tcp://localhost:0")));
         receiver = Nodes.newBuilder().id(PeerUtils.receiverId())
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(TransportUtils.defaultOptions()))
@@ -53,7 +54,7 @@ class IntegrationTest {
     }
 
     @Test
-    void testCooperative() throws Exception {
+    void testCooperative() {
         sender.peerStore().save(asPeer(receiver));
         sender.peerStore().save(asPeer(witness));
         var connectionId = sender.connect(receiver.id(), new ConnectionOptions(), TransportUtils.defaultOptions());
@@ -141,9 +142,9 @@ class IntegrationTest {
 
     @AfterEach
     void teardown() {
-        ((NettyTransport) sender.transport()).close();
-        ((NettyTransport) witness.transport()).close();
-        ((NettyTransport) receiver.transport()).close();
+        sender.transport().shutdown();
+        witness.transport().shutdown();
+        receiver.transport().shutdown();
     }
 
     private Peer asPeer(Node node) {
@@ -152,7 +153,7 @@ class IntegrationTest {
         return peer;
     }
 
-    void verifyConnectionPresent(TestConnection expected, Node node) throws Exception {
+    void verifyConnectionPresent(TestConnection expected, Node node) {
         try(var ref = assertDoesNotThrow(() -> node.findConnection(expected.id()))) {
             switch (ref) {
                 case Connection.Readable(Connection connection) -> expected.assertMatches(connection);

@@ -336,7 +336,7 @@ class NettyTransportTest {
     // implicitly serves as a test of close
     @AfterAll
     void cleanup() throws NoSuchFieldException, IllegalAccessException {
-        transport.close();
+        transport.shutdown();
         var workerGroup = ReflectionTestUtils.getFieldValue(transport, "workerGroup", EventLoopGroup.class);
         assertTrue(workerGroup.isShutdown());
         var bossGroup = ReflectionTestUtils.getFieldValue(transport, "bossGroup", EventLoopGroup.class);

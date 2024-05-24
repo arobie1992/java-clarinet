@@ -38,5 +38,15 @@ public interface NodeBuilder {
     NodeBuilder connectHandler(Handler<ConnectRequest, ConnectResponse> connectHandler);
     NodeBuilder trustFilter(Function<Stream<? extends Reputation>, Stream<PeerId>> trustFunction);
     NodeBuilder reputationStore(ReputationStore reputationStore);
+    /**
+     * User-defined behavior for determining whether to be witness to a connection.
+     * <p>
+     * The returned {@code WitnessResponse} is used to determine if the node should create the connection or not. Users
+     * do not need to perform any of these operations themselves. <b>This field is optional; however, if not specified,
+     * all witness requests are accepted.</b>
+     * @param witnessHandler The handler implementing the user-desired behavior.
+     * @return {@code this} builder for fluent building.
+     */
+    NodeBuilder witnessHandler(Handler<WitnessRequest, WitnessResponse> witnessHandler);
     Node build();
 }

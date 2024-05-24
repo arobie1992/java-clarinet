@@ -105,4 +105,10 @@ class TransportProxyTest {
         when(transport.exchange(AddressUtils.defaultAddress(), endpoint, msg, String.class, TransportUtils.defaultOptions())).thenReturn(resp);
         assertEquals(resp, transportProxy.exchange(AddressUtils.defaultAddress(), endpoint, msg, String.class, TransportUtils.defaultOptions()));
     }
+
+    @Test
+    void testShutdown() {
+        transportProxy.shutdown();
+        verify(transport).shutdown();
+    }
 }
