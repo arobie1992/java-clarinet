@@ -61,6 +61,11 @@ class TransportProxy implements Transport {
     }
 
     @Override
+    public void send(Address address, String endpoint, Object message, TransportOptions options) {
+        transport.send(address, endpoint, message, options);
+    }
+
+    @Override
     public void shutdown() {
         transport.shutdown();
     }

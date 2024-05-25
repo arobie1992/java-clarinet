@@ -25,6 +25,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -58,8 +59,11 @@ class NettyTransportTest {
     private final Message response = new Message("response");
     private final String exchangeEndpoint = "exchange";
     private final TestHandler exchangeHandler = new TestHandler();
+    private final String sendEndpoint = "send";
+    private final TestHandler sendHandler = new TestHandler();
 
     private Address address;
+    private CountDownLatch sendLatch;
 
     NettyTransportTest() {
         objectMapper.registerModule(new Jdk8Module());
@@ -68,10 +72,20 @@ class NettyTransportTest {
     @BeforeEach
     void setUp() throws URISyntaxException {
         address = transport.add(new UriAddress(new URI("tcp://localhost:0")));
+
         exchangeHandler.remoteAddress = null;
         exchangeHandler.receivedMessage = null;
         exchangeHandler.delegate = ignoredMessage -> response;
         transport.add(exchangeEndpoint, exchangeHandler);
+
+        sendHandler.remoteAddress = null;
+        sendHandler.receivedMessage = null;
+        sendLatch = new CountDownLatch(1);
+        sendHandler.delegate = ignoredMessage -> {
+            sendLatch.countDown();
+            return null;
+        };
+        transport.add(sendEndpoint, sendHandler);
     }
 
     @Test
@@ -90,11 +104,30 @@ class NettyTransportTest {
     }
 
     @Test
+    void testSend() throws InterruptedException {
+        // just send to itself because there's no reason it shouldn't work
+        transport.send(address, sendEndpoint, message, TransportUtils.defaultOptions());
+        // need to wait for the send to complete so that the cleanup doesn't remove the handlers before the dispatcher starts
+        sendLatch.await();
+        assertEquals(message, sendHandler.receivedMessage);
+    }
+
+    @Test
     void testExchangeNotTcpAddress() throws URISyntaxException {
         var address = new UriAddress(new URI("udp://localhost"));
         var ex = assertThrows(
                 IllegalArgumentException.class,
                 () -> transport.exchange(address, exchangeEndpoint, message, Message.class, TransportUtils.defaultOptions())
+        );
+        assertEquals("Address is not a tcp address: " + address, ex.getMessage());
+    }
+
+    @Test
+    void testSendNotTcpAddress() throws URISyntaxException {
+        var address = new UriAddress(new URI("udp://localhost"));
+        var ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> transport.send(address, sendEndpoint, message, TransportUtils.defaultOptions())
         );
         assertEquals("Address is not a tcp address: " + address, ex.getMessage());
     }
@@ -107,6 +140,13 @@ class NettyTransportTest {
                 UncheckedIOException.class,
                 () -> transport.exchange(address, exchangeEndpoint, message, Message.class, TransportUtils.defaultOptions())
         );
+    }
+
+    @Test
+    void testSendIOException() throws URISyntaxException {
+        // hopefully nothing is running on this port
+        var address = new UriAddress(new URI("tcp://localhost:9999"));
+        assertThrows(UncheckedIOException.class, () -> transport.send(address, sendEndpoint, message, TransportUtils.defaultOptions()));
     }
 
     @Test
@@ -123,7 +163,7 @@ class NettyTransportTest {
     }
 
     @Test
-    void testHandlerGetsAddress() throws IOException, URISyntaxException {
+    void testExchangeHandlerGetsAddress() throws IOException, URISyntaxException {
         var addrUri = address.asURI();
         try(var sock = new Socket()) {
             sock.connect(new InetSocketAddress(addrUri.getHost(), addrUri.getPort()), 1000);
@@ -134,6 +174,20 @@ class NettyTransportTest {
             assertEquals(response, objectMapper.readValue(bytes, Message.class));
             var expectedAddress = new UriAddress(new URI("tcp://" + sock.getLocalAddress().getHostName() + ":" + sock.getLocalPort()));
             assertEquals(expectedAddress, exchangeHandler.remoteAddress);
+        }
+    }
+
+    @Test
+    void testSendHandlerGetsAddress() throws IOException, URISyntaxException, InterruptedException {
+        var addrUri = address.asURI();
+        try(var sock = new Socket()) {
+            sock.connect(new InetSocketAddress(addrUri.getHost(), addrUri.getPort()), 1000);
+            var out = sock.getOutputStream();
+            out.write(objectMapper.writeValueAsBytes(new com.github.arobie1992.clarinet.transport.Message(sendEndpoint, message)));
+            var expectedAddress = new UriAddress(new URI("tcp://" + sock.getLocalAddress().getHostName() + ":" + sock.getLocalPort()));
+            // need to wait for the send to complete so that the cleanup doesn't remove the handlers before the dispatcher starts
+            sendLatch.await();
+            assertEquals(expectedAddress, sendHandler.remoteAddress);
         }
     }
 

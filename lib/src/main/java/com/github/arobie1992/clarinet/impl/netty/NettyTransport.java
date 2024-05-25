@@ -174,6 +174,18 @@ public class NettyTransport implements Transport, AutoCloseable {
     }
 
     @Override
+    public void send(Address address, String endpoint, Object message, TransportOptions options) {
+        var addrUri = validateAddress(address);
+        try(var sock = new Socket()) {
+            sock.connect(new InetSocketAddress(addrUri.getHost(), addrUri.getPort()), timeoutMillis(options.sendTimeout()));
+            var out = sock.getOutputStream();
+            out.write(objectMapper.writeValueAsBytes(new Message(endpoint, message)));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    @Override
     public void shutdown() {
         close();
     }

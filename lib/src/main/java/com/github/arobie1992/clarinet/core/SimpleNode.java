@@ -79,6 +79,22 @@ class SimpleNode implements Node {
         }).filter(Objects::nonNull);
     }
 
+    private void sendForPeer(Peer peer, String endpoint, Object request, TransportOptions transportOptions) {
+        for(var addr : peer.addresses()) {
+            try {
+                transport.send(addr, endpoint, request, transportOptions);
+                // return for the first address that is successful
+                return;
+            } catch(RuntimeException e) {
+                // TODO decide if it's worth signaling this back to the caller
+                // I think I'm going to do this through an error handler
+                // input will be the address and the exception
+                log.warn("Encountered error while sending to peer {} at address {} for endpoint {}", peer, addr, endpoint, e);
+            }
+        }
+        throw new PeerSendException(peer.id());
+    }
+
     @Override
     public ConnectionId connect(PeerId receiver, ConnectionOptions connectionOptions, TransportOptions transportOptions) {
         var connectionId = connectionStore.create(id(), receiver, Connection.Status.REQUESTING_RECEIVER);
@@ -127,8 +143,18 @@ class SimpleNode implements Node {
             }
             connection.setWitness(witness.id());
             connection.setStatus(Connection.Status.NOTIFYING_OF_WITNESS);
-        } catch(Exception e) {
-            throw new RuntimeException(e);
+        }
+
+        sendForPeer(peer, Endpoints.WITNESS_NOTIFICATION.name(), new WitnessNotification(connectionId, witness.id()), transportOptions);
+        /*
+         sendForPeer only returns if the send was successful as near as this side can tell, so will only reach this part
+         if it seems successful.
+         */
+        try(var ref = connectionStore.findForWrite(connectionId)) {
+            if(!(ref instanceof Writeable(ConnectionImpl connection))) {
+                throw new NoSuchConnectionException(connectionId);
+            }
+            connection.setStatus(Connection.Status.OPEN);
         }
 
         return connectionId;

@@ -107,6 +107,14 @@ class TransportProxyTest {
     }
 
     @Test
+    void testSend() {
+        var endpoint = "endpoint";
+        var msg = "msg";
+        transportProxy.send(AddressUtils.defaultAddress(), endpoint, msg, TransportUtils.defaultOptions());
+        verify(transport).send(AddressUtils.defaultAddress(), endpoint, msg, TransportUtils.defaultOptions());
+    }
+
+    @Test
     void testShutdown() {
         transportProxy.shutdown();
         verify(transport).shutdown();
