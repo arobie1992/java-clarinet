@@ -35,6 +35,10 @@ class SimpleNode implements Node {
         this.transport = new TransportProxy(Objects.requireNonNull(builder.transportFactory.get()));
         this.transport.addInternal(Endpoints.CONNECT.name(), new ConnectHandlerProxy(builder.connectHandler, connectionStore, this));
         this.transport.addInternal(Endpoints.WITNESS.name(), new WitnessHandlerProxy(builder.witnessHandler, connectionStore, this));
+        this.transport.addInternal(
+                Endpoints.WITNESS_NOTIFICATION.name(),
+                new WitnessNotificationHandlerProxy(builder.witnessNotificationHandler, connectionStore)
+        );
         this.trustFilter = Objects.requireNonNull(builder.trustFilter);
         this.reputationStore = Objects.requireNonNull(builder.reputationStore);
     }
@@ -162,12 +166,38 @@ class SimpleNode implements Node {
 
     @Override
     public void addConnectHandler(Handler<ConnectRequest, ConnectResponse> connectHandler) {
-        this.transport.add(Endpoints.CONNECT.name(), new ConnectHandlerProxy(connectHandler, connectionStore, this));
+        this.transport.addInternal(Endpoints.CONNECT.name(), new ConnectHandlerProxy(connectHandler, connectionStore, this));
     }
 
     @Override
     public void removeConnectHandler() {
-        this.transport.add(Endpoints.CONNECT.name(), new ConnectHandlerProxy(null, connectionStore, this));
+        this.transport.addInternal(Endpoints.CONNECT.name(), new ConnectHandlerProxy(null, connectionStore, this));
+    }
+
+    @Override
+    public void addWitnessHandler(Handler<WitnessRequest, WitnessResponse> witnessHandler) {
+        this.transport.addInternal(Endpoints.WITNESS.name(), new WitnessHandlerProxy(witnessHandler, connectionStore, this));
+    }
+
+    @Override
+    public void removeWitnessHandler() {
+        this.transport.addInternal(Endpoints.WITNESS.name(), new WitnessHandlerProxy(null, connectionStore, this));
+    }
+
+    @Override
+    public void addWitnessNotificationHandler(Handler<WitnessNotification, Void> witnessNotificationHandler) {
+        this.transport.addInternal(
+                Endpoints.WITNESS_NOTIFICATION.name(),
+                new WitnessNotificationHandlerProxy(witnessNotificationHandler, connectionStore)
+        );
+    }
+
+    @Override
+    public void removeWitnessNotificationHandler() {
+        this.transport.addInternal(
+                Endpoints.WITNESS_NOTIFICATION.name(),
+                new WitnessNotificationHandlerProxy(null, connectionStore)
+        );
     }
 
     static class Builder implements NodeBuilder {
@@ -178,6 +208,7 @@ class SimpleNode implements Node {
         private Function<Stream<? extends Reputation>, Stream<PeerId>> trustFilter;
         private ReputationStore reputationStore;
         private Handler<WitnessRequest, WitnessResponse> witnessHandler;
+        private Handler<WitnessNotification, Void> witnessNotificationHandler;
 
         @Override
         public NodeBuilder id(PeerId id) {
@@ -218,6 +249,12 @@ class SimpleNode implements Node {
         @Override
         public NodeBuilder witnessHandler(Handler<WitnessRequest, WitnessResponse> witnessHandler) {
             this.witnessHandler = witnessHandler;
+            return this;
+        }
+
+        @Override
+        public NodeBuilder witnessNotificationHandler(Handler<WitnessNotification, Void> witnessNotificationHandler) {
+            this.witnessNotificationHandler = witnessNotificationHandler;
             return this;
         }
 

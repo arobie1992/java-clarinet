@@ -1,19 +1,18 @@
 package com.github.arobie1992.clarinet;
 
-import com.github.arobie1992.clarinet.core.Connection;
-import com.github.arobie1992.clarinet.core.ConnectionOptions;
-import com.github.arobie1992.clarinet.core.Node;
-import com.github.arobie1992.clarinet.core.Nodes;
+import com.github.arobie1992.clarinet.core.*;
 import com.github.arobie1992.clarinet.impl.inmemory.InMemoryPeerStore;
 import com.github.arobie1992.clarinet.impl.inmemory.InMemoryReputationStore;
 import com.github.arobie1992.clarinet.impl.netty.NettyTransport;
 import com.github.arobie1992.clarinet.impl.peer.UriAddress;
 import com.github.arobie1992.clarinet.impl.reputation.ProportionalReputation;
+import com.github.arobie1992.clarinet.peer.Address;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.reputation.TrustFilters;
 import com.github.arobie1992.clarinet.testutils.PeerUtils;
 import com.github.arobie1992.clarinet.testutils.TestConnection;
 import com.github.arobie1992.clarinet.testutils.TransportUtils;
+import com.github.arobie1992.clarinet.transport.Handler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 class IntegrationTest {
 
     private Node sender, witness, receiver;
+    private CountDownLatch sendLatch;
 
     @BeforeEach
     void setUp() throws URISyntaxException {
@@ -51,14 +52,29 @@ class IntegrationTest {
                 .reputationStore(new InMemoryReputationStore(ProportionalReputation::new))
                 .build();
         receiver.transport().add(new UriAddress(new URI("tcp://localhost:0")));
+        sendLatch = new CountDownLatch(1);
     }
 
     @Test
-    void testCooperative() {
+    void testCooperative() throws InterruptedException {
         sender.peerStore().save(asPeer(receiver));
         sender.peerStore().save(asPeer(witness));
+        receiver.addWitnessNotificationHandler(new Handler<>() {
+            @Override
+            public Void handle(Address remoteAddress, WitnessNotification message) {
+                sendLatch.countDown();
+                return null;
+            }
+
+            @Override
+            public Class<WitnessNotification> inputType() {
+                return WitnessNotification.class;
+            }
+        });
         var connectionId = sender.connect(receiver.id(), new ConnectionOptions(), TransportUtils.defaultOptions());
         var expected = new TestConnection(connectionId, sender.id(), Optional.of(witness.id()), receiver.id(), Connection.Status.OPEN);
+        // need latch to ensure test doesn't do verification before the witness notification handler has executed
+        sendLatch.await();
         verifyConnectionPresent(expected, sender);
         verifyConnectionPresent(expected, witness);
         verifyConnectionPresent(expected, receiver);

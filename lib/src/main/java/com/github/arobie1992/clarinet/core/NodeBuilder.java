@@ -38,6 +38,7 @@ public interface NodeBuilder {
     NodeBuilder connectHandler(Handler<ConnectRequest, ConnectResponse> connectHandler);
     NodeBuilder trustFilter(Function<Stream<? extends Reputation>, Stream<PeerId>> trustFunction);
     NodeBuilder reputationStore(ReputationStore reputationStore);
+
     /**
      * User-defined behavior for determining whether to be witness to a connection.
      * <p>
@@ -48,5 +49,15 @@ public interface NodeBuilder {
      * @return {@code this} builder for fluent building.
      */
     NodeBuilder witnessHandler(Handler<WitnessRequest, WitnessResponse> witnessHandler);
+
+    /**
+     * User-defined behavior for dealing with witness notifications.
+     * <p>
+     * Users do not need to update the connection themselves.
+     * @param witnessNotificationHandler The handler implementing the user-desired behavior.
+     * @return {@code this} builder for fluent building.
+     */
+    NodeBuilder witnessNotificationHandler(Handler<WitnessNotification, Void> witnessNotificationHandler);
+
     Node build();
 }

@@ -32,4 +32,12 @@ public interface Node {
     void addConnectHandler(Handler<ConnectRequest, ConnectResponse> connectHandler);
 
     void removeConnectHandler();
+
+    void addWitnessHandler(Handler<WitnessRequest, WitnessResponse> witnessHandler);
+
+    void addWitnessNotificationHandler(Handler<WitnessNotification, Void> witnessNotificationHandler);
+
+    void removeWitnessHandler();
+
+    void removeWitnessNotificationHandler();
 }
