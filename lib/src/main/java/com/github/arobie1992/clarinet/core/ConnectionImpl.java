@@ -21,6 +21,7 @@ non-sealed class ConnectionImpl implements Connection {
     private final PeerId receiver;
     private Status status;
     final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private long nextSeqNo = 0;
 
     ConnectionImpl(ConnectionId id, PeerId sender, PeerId receiver, Status status) {
         this.id = Objects.requireNonNull(id);
@@ -65,6 +66,17 @@ non-sealed class ConnectionImpl implements Connection {
     @Override
     public Status status() {
         return status;
+    }
+
+    @Override
+    public long nextSequenceNumber() {
+        assertWriteLocked();
+        if(nextSeqNo < 0) {
+            throw new ArithmeticException("nextSequenceNumber overflow");
+        }
+        var seqNo = nextSeqNo;
+        nextSeqNo++;
+        return seqNo;
     }
 
     private void assertWriteLocked() {

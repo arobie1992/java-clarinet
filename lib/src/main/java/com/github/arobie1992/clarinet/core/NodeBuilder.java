@@ -1,5 +1,7 @@
 package com.github.arobie1992.clarinet.core;
 
+import com.github.arobie1992.clarinet.crypto.KeyStore;
+import com.github.arobie1992.clarinet.message.MessageStore;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
 import com.github.arobie1992.clarinet.reputation.Reputation;
@@ -58,6 +60,10 @@ public interface NodeBuilder {
      * @return {@code this} builder for fluent building.
      */
     NodeBuilder witnessNotificationHandler(Handler<WitnessNotification, Void> witnessNotificationHandler);
+
+    NodeBuilder messageStore(MessageStore messageStore);
+
+    NodeBuilder keyStore(KeyStore keyStore);
 
     Node build();
 }

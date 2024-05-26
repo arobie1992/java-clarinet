@@ -1,5 +1,8 @@
 package com.github.arobie1992.clarinet.core;
 
+import com.github.arobie1992.clarinet.crypto.KeyStore;
+import com.github.arobie1992.clarinet.message.MessageId;
+import com.github.arobie1992.clarinet.message.MessageStore;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
 import com.github.arobie1992.clarinet.transport.Handler;
@@ -12,6 +15,11 @@ public interface Node {
     Transport transport();
 
     Connection.ReadableReference findConnection(ConnectionId connectionId);
+
+    MessageStore messageStore();
+
+    KeyStore keyStore();
+
     /**
      * Establishes an outgoing communication channel with the specified node at the specified address.
      * <p>
@@ -28,6 +36,8 @@ public interface Node {
      * @return the {@link ConnectionId} of the newly created connection.
      */
     ConnectionId connect(PeerId receiver, ConnectionOptions connectionOptions, TransportOptions transportOptions);
+
+    MessageId send(ConnectionId connectionId, byte[] data);
 
     void addConnectHandler(Handler<ConnectRequest, ConnectResponse> connectHandler);
 

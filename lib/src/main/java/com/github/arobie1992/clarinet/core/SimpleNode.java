@@ -1,5 +1,9 @@
 package com.github.arobie1992.clarinet.core;
 
+import com.github.arobie1992.clarinet.crypto.KeyStore;
+import com.github.arobie1992.clarinet.message.DataMessage;
+import com.github.arobie1992.clarinet.message.MessageId;
+import com.github.arobie1992.clarinet.message.MessageStore;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
@@ -28,10 +32,12 @@ class SimpleNode implements Node {
     private final TransportProxy transport;
     private final Function<Stream<? extends Reputation>, Stream<PeerId>> trustFilter;
     private final ReputationStore reputationStore;
+    private final MessageStore messageStore;
+    private final KeyStore keyStore;
 
     private SimpleNode(Builder builder) {
-        this.id = Objects.requireNonNull(builder.id);
-        this.peerStore = Objects.requireNonNull(builder.peerStore);
+        this.id = Objects.requireNonNull(builder.id, "id");
+        this.peerStore = Objects.requireNonNull(builder.peerStore, "peerStore");
         this.transport = new TransportProxy(Objects.requireNonNull(builder.transportFactory.get()));
         this.transport.addInternal(Endpoints.CONNECT.name(), new ConnectHandlerProxy(builder.connectHandler, connectionStore, this));
         this.transport.addInternal(Endpoints.WITNESS.name(), new WitnessHandlerProxy(builder.witnessHandler, connectionStore, this));
@@ -39,8 +45,10 @@ class SimpleNode implements Node {
                 Endpoints.WITNESS_NOTIFICATION.name(),
                 new WitnessNotificationHandlerProxy(builder.witnessNotificationHandler, connectionStore)
         );
-        this.trustFilter = Objects.requireNonNull(builder.trustFilter);
-        this.reputationStore = Objects.requireNonNull(builder.reputationStore);
+        this.trustFilter = Objects.requireNonNull(builder.trustFilter, "trustFilter");
+        this.reputationStore = Objects.requireNonNull(builder.reputationStore, "reputationStore");
+        this.messageStore = Objects.requireNonNull(builder.messageStore, "messageStore");
+        this.keyStore = Objects.requireNonNull(builder.keyStore, "keyStore");
     }
 
     @Override
@@ -61,6 +69,16 @@ class SimpleNode implements Node {
     @Override
     public Connection.ReadableReference findConnection(ConnectionId connectionId) {
         return connectionStore.findForRead(connectionId);
+    }
+
+    @Override
+    public MessageStore messageStore() {
+        return messageStore;
+    }
+
+    @Override
+    public KeyStore keyStore() {
+        return keyStore;
     }
 
     private <T> Stream<T> exchangeForPeer(
@@ -165,6 +183,19 @@ class SimpleNode implements Node {
     }
 
     @Override
+    public MessageId send(ConnectionId connectionId, byte[] data) {
+        try(var ref = connectionStore.findForWrite(connectionId)) {
+            if(!(ref instanceof Writeable(ConnectionImpl connection))) {
+                throw new NoSuchConnectionException(connectionId);
+            }
+            var messageId = new MessageId(connectionId, connection.nextSequenceNumber());
+            var message = new DataMessage(messageId, new String(data));
+            messageStore.add(message);
+            return message.messageId();
+        }
+    }
+
+    @Override
     public void addConnectHandler(Handler<ConnectRequest, ConnectResponse> connectHandler) {
         this.transport.addInternal(Endpoints.CONNECT.name(), new ConnectHandlerProxy(connectHandler, connectionStore, this));
     }
@@ -209,6 +240,8 @@ class SimpleNode implements Node {
         private ReputationStore reputationStore;
         private Handler<WitnessRequest, WitnessResponse> witnessHandler;
         private Handler<WitnessNotification, Void> witnessNotificationHandler;
+        private MessageStore messageStore;
+        private KeyStore keyStore;
 
         @Override
         public NodeBuilder id(PeerId id) {
@@ -255,6 +288,18 @@ class SimpleNode implements Node {
         @Override
         public NodeBuilder witnessNotificationHandler(Handler<WitnessNotification, Void> witnessNotificationHandler) {
             this.witnessNotificationHandler = witnessNotificationHandler;
+            return this;
+        }
+
+        @Override
+        public NodeBuilder messageStore(MessageStore messageStore) {
+            this.messageStore = messageStore;
+            return this;
+        }
+
+        @Override
+        public NodeBuilder keyStore(KeyStore keyStore) {
+            this.keyStore = keyStore;
             return this;
         }
 

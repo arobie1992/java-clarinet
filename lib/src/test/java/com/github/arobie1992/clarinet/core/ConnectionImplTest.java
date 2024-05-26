@@ -75,6 +75,30 @@ class ConnectionImplTest {
         assertEquals("setStatus", ex.operationName());
     }
 
+    @Test
+    void testNextSequenceNumber() {
+        connection.lock.writeLock().lock();
+        assertEquals(0, connection.nextSequenceNumber());
+    }
+
+    @Test
+    void testNextSequenceNumberThrowsWhenNotWriteLocked() {
+        var ex = assertThrows(WriteLockException.class, () -> connection.nextSequenceNumber());
+        assertEquals("nextSequenceNumber", ex.operationName());
+    }
+
+    @Test
+    void testNextSequenceNumberOverflow() throws NoSuchFieldException, IllegalAccessException {
+        // I'm not iterating it up to long max val
+        var field = ConnectionImpl.class.getDeclaredField("nextSeqNo");
+        field.setAccessible(true);
+        field.set(connection, Long.MAX_VALUE);
+        connection.lock.writeLock().lock();
+        assertEquals(Long.MAX_VALUE, connection.nextSequenceNumber());
+        var ex = assertThrows(ArithmeticException.class, () -> connection.nextSequenceNumber());
+        assertEquals("nextSequenceNumber overflow", ex.getMessage());
+    }
+
     private static Stream<Arguments> creationPermutations() {
         return Stream.of(
                 Arguments.of(

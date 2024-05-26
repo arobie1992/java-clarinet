@@ -11,6 +11,8 @@ public sealed interface Connection permits ConnectionImpl {
     PeerId receiver();
     Connection.Status status();
 
+    long nextSequenceNumber();
+
     /**
      * {@code Reference} allows access to a {@link Connection} and performs any necessary unlocking in its
      * {@link Reference#close()} method.

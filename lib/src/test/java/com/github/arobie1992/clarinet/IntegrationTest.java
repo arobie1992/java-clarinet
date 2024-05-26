@@ -1,16 +1,18 @@
 package com.github.arobie1992.clarinet;
 
 import com.github.arobie1992.clarinet.core.*;
+import com.github.arobie1992.clarinet.impl.inmemory.InMemoryKeyStore;
+import com.github.arobie1992.clarinet.impl.inmemory.InMemoryMessageStore;
 import com.github.arobie1992.clarinet.impl.inmemory.InMemoryPeerStore;
 import com.github.arobie1992.clarinet.impl.inmemory.InMemoryReputationStore;
 import com.github.arobie1992.clarinet.impl.netty.NettyTransport;
 import com.github.arobie1992.clarinet.impl.peer.UriAddress;
-import com.github.arobie1992.clarinet.impl.reputation.ProportionalReputation;
 import com.github.arobie1992.clarinet.peer.Address;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.reputation.TrustFilters;
 import com.github.arobie1992.clarinet.testutils.PeerUtils;
 import com.github.arobie1992.clarinet.testutils.TestConnection;
+import com.github.arobie1992.clarinet.testutils.TestReputation;
 import com.github.arobie1992.clarinet.testutils.TransportUtils;
 import com.github.arobie1992.clarinet.transport.Handler;
 import org.junit.jupiter.api.AfterEach;
@@ -22,8 +24,7 @@ import java.net.URISyntaxException;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.*;
 
 class IntegrationTest {
 
@@ -36,20 +37,26 @@ class IntegrationTest {
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(TransportUtils.defaultOptions()))
                 .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
-                .reputationStore(new InMemoryReputationStore(ProportionalReputation::new))
+                .reputationStore(new InMemoryReputationStore(TestReputation::new))
+                .messageStore(new InMemoryMessageStore())
+                .keyStore(new InMemoryKeyStore())
                 .build();
         witness = Nodes.newBuilder().id(PeerUtils.witnessId())
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(TransportUtils.defaultOptions()))
                 .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
-                .reputationStore(new InMemoryReputationStore(ProportionalReputation::new))
+                .reputationStore(new InMemoryReputationStore(TestReputation::new))
+                .messageStore(new InMemoryMessageStore())
+                .keyStore(new InMemoryKeyStore())
                 .build();
         witness.transport().add(new UriAddress(new URI("tcp://localhost:0")));
         receiver = Nodes.newBuilder().id(PeerUtils.receiverId())
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(TransportUtils.defaultOptions()))
                 .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
-                .reputationStore(new InMemoryReputationStore(ProportionalReputation::new))
+                .reputationStore(new InMemoryReputationStore(TestReputation::new))
+                .messageStore(new InMemoryMessageStore())
+                .keyStore(new InMemoryKeyStore())
                 .build();
         receiver.transport().add(new UriAddress(new URI("tcp://localhost:0")));
         sendLatch = new CountDownLatch(1);
@@ -71,6 +78,8 @@ class IntegrationTest {
                 return WitnessNotification.class;
             }
         });
+
+        // connection creation
         var connectionId = sender.connect(receiver.id(), new ConnectionOptions(), TransportUtils.defaultOptions());
         var expected = new TestConnection(connectionId, sender.id(), Optional.of(witness.id()), receiver.id(), Connection.Status.OPEN);
         // need latch to ensure test doesn't do verification before the witness notification handler has executed
@@ -78,7 +87,28 @@ class IntegrationTest {
         verifyConnectionPresent(expected, sender);
         verifyConnectionPresent(expected, witness);
         verifyConnectionPresent(expected, receiver);
-        fail("Test sending messages, reputation, and querying");
+
+        // sending a message
+        var data = new byte[]{0, 1, 2, 3, 4};
+        var messageId = sender.send(connectionId, data);
+        var messageOpt = sender.messageStore().find(messageId);
+        assertTrue(messageOpt.isPresent());
+        var message = messageOpt.get();
+        assertEquals(new String(data), message.data());
+        assertEquals(connectionId, message.messageId().connectionId());
+        assertEquals(0, message.messageId().sequenceNumber());
+        var pubKeys = sender.keyStore().findPublicKeys(sender.id());
+        assertFalse(pubKeys.isEmpty());
+//        assertTrue(verifySender(message, pubKeyOpt.get()));
+
+        fail("test for witness and receiver");
+        fail("Test reputation, and querying");
+
+        // sender querying message
+
+        // witness querying message
+
+        // receiver querying message
     }
 
     @Test
