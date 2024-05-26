@@ -74,4 +74,14 @@ class WitnessNotificationHandlerProxyTest {
         assertEquals(WitnessNotification.class, handlerProxy.inputType());
     }
 
+    @Test
+    void testConnectionNotAwaitingWitness() {
+        connection.setStatus(Connection.Status.REQUESTING_RECEIVER);
+        var ex = assertThrows(
+                UnsupportedOperationException.class,
+                () -> handlerProxy.handle(AddressUtils.defaultAddress(), witnessNotification)
+        );
+        assertEquals("Connection " + witnessNotification.connectionId() + " is not awaiting witness.", ex.getMessage());
+    }
+
 }

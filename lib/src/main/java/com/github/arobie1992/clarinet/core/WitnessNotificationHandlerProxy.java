@@ -20,10 +20,13 @@ class WitnessNotificationHandlerProxy implements Handler<WitnessNotification, Vo
         try(var ref = connectionStore.findForWrite(message.connectionId())) {
             switch (ref) {
                 case Writeable(ConnectionImpl conn) -> {
+                    if(!Connection.Status.AWAITING_WITNESS.equals(conn.status())) {
+                        throw new UnsupportedOperationException("Connection " + message.connectionId() + " is not awaiting witness.");
+                    }
                     conn.setWitness(message.witness());
                     conn.setStatus(Connection.Status.OPEN);
                 }
-                case Connection.Absent ignored -> throw new NoSuchConnectionException(message.connectionId());
+                case Connection.Absent() -> throw new NoSuchConnectionException(message.connectionId());
             }
         }
         return null;

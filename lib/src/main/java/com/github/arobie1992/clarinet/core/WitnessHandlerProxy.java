@@ -25,7 +25,7 @@ class WitnessHandlerProxy implements Handler<WitnessRequest, WitnessResponse> {
                 switch (ref) {
                     // setWitness automatically persists back to the reference so no need to do any saving
                     case Writeable(ConnectionImpl conn) -> conn.setWitness(node.id());
-                    case Connection.Absent ignored -> throw new IllegalStateException("Failed to accept connection");
+                    case Connection.Absent() -> throw new IllegalStateException("Failed to accept connection");
                 }
             }
         }
