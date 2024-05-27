@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.github.arobie1992.clarinet.adt.None;
 import com.github.arobie1992.clarinet.core.*;
+import com.github.arobie1992.clarinet.crypto.PublicKey;
 import com.github.arobie1992.clarinet.impl.crypto.Keys;
 import com.github.arobie1992.clarinet.impl.inmemory.InMemoryKeyStore;
 import com.github.arobie1992.clarinet.impl.inmemory.InMemoryMessageStore;
@@ -15,6 +16,8 @@ import com.github.arobie1992.clarinet.impl.netty.ConnectionIdSerializer;
 import com.github.arobie1992.clarinet.impl.netty.NettyTransport;
 import com.github.arobie1992.clarinet.impl.netty.PeerIdSerializer;
 import com.github.arobie1992.clarinet.impl.peer.UriAddress;
+import com.github.arobie1992.clarinet.message.DataMessage;
+import com.github.arobie1992.clarinet.message.MessageId;
 import com.github.arobie1992.clarinet.peer.Address;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.peer.PeerId;
@@ -31,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.NoSuchAlgorithmException;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 
@@ -114,17 +118,9 @@ class IntegrationTest {
         // sending a message
         var data = new byte[]{0, 1, 2, 3, 4};
         var messageId = sender.send(connectionId, data);
-        var messageOpt = sender.messageStore().find(messageId);
-        assertTrue(messageOpt.isPresent());
-        var message = messageOpt.get();
-        assertArrayEquals(data, message.data());
-        assertEquals(connectionId, message.messageId().connectionId());
-        assertEquals(0, message.messageId().sequenceNumber());
-        var pubKeys = sender.keyStore().findPublicKeys(sender.id());
-        assertEquals(1, pubKeys.size());
-        var bytes = objectMapper.writeValueAsBytes(message.senderParts());
-        var key = pubKeys.iterator().next();
-        assertTrue(key.verify(bytes, message.senderSignature().orElseThrow()));
+        verifyMessage(sender, messageId, 0, data, MessageVerificationMode.SENDER_ONLY);
+        verifyMessage(witness, messageId, 0, data, MessageVerificationMode.SENDER_AND_WITNESS);
+        verifyMessage(receiver, messageId, 0, data, MessageVerificationMode.SENDER_AND_WITNESS);
 
         fail("test for witness and receiver");
         fail("Test reputation, and querying");
@@ -233,4 +229,46 @@ class IntegrationTest {
         }
     }
 
+    private enum MessageVerificationMode {
+        SENDER_ONLY,
+        SENDER_AND_WITNESS
+    }
+
+    private void verifyMessage(
+            Node node,
+            MessageId messageId,
+            @SuppressWarnings("SameParameterValue") long seqNo,
+            byte[] data,
+            @SuppressWarnings("SameParameterValue") MessageVerificationMode mode
+    ) throws JsonProcessingException {
+        try(var ref = node.findConnection(messageId.connectionId())) {
+            if(!(ref instanceof Connection.Readable(Connection connection))) {
+                fail("connection not found");
+                throw new IllegalStateException("unreachable");
+            }
+            var messageOpt = node.messageStore().find(messageId);
+            assertTrue(messageOpt.isPresent());
+            var message = messageOpt.get();
+            assertArrayEquals(data, message.data());
+            assertEquals(seqNo, message.messageId().sequenceNumber());
+            Collection<PublicKey> pubKeys;
+            byte[] encoded;
+            switch(mode) {
+                case SENDER_AND_WITNESS:
+                    pubKeys = node.keyStore().findPublicKeys(connection.witness().orElseThrow());
+                    encoded = objectMapper.writeValueAsBytes(message.witnessParts());
+                    verifyMessage(pubKeys, encoded, message);
+                case SENDER_ONLY:
+                    pubKeys = node.keyStore().findPublicKeys(connection.sender());
+                    encoded = objectMapper.writeValueAsBytes(message.senderParts());
+                    verifyMessage(pubKeys, encoded, message);
+                    break;
+            }
+        }
+    }
+
+    private void verifyMessage(Collection<PublicKey> pubKeys, byte[] data, DataMessage message) {
+        var key = pubKeys.iterator().next();
+        assertTrue(key.verify(data, message.senderSignature().orElseThrow()));
+    }
 }
