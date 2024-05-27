@@ -1,8 +1,9 @@
 package com.github.arobie1992.clarinet.core;
 
+import com.github.arobie1992.clarinet.adt.Some;
 import com.github.arobie1992.clarinet.testutils.AddressUtils;
 import com.github.arobie1992.clarinet.testutils.PeerUtils;
-import com.github.arobie1992.clarinet.transport.Handler;
+import com.github.arobie1992.clarinet.transport.ExchangeHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -14,7 +15,7 @@ class WitnessHandlerProxyTest {
 
     private final WitnessRequest witnessRequest = new WitnessRequest(ConnectionId.random(), PeerUtils.senderId(), PeerUtils.receiverId());
 
-    private Handler<WitnessRequest, WitnessResponse> handler;
+    private ExchangeHandler<WitnessRequest, WitnessResponse> handler;
     private ConnectionStore connectionStore;
     private Node node;
     private WitnessHandlerProxy handlerProxy;
@@ -22,7 +23,7 @@ class WitnessHandlerProxyTest {
     @BeforeEach
     public void setUp() {
         //noinspection unchecked
-        handler = (Handler<WitnessRequest, WitnessResponse>) mock(Handler.class);
+        handler = (ExchangeHandler<WitnessRequest, WitnessResponse>) mock(ExchangeHandler.class);
         connectionStore = mock(ConnectionStore.class);
         node = mock(Node.class);
         handlerProxy = new WitnessHandlerProxy(handler, connectionStore, node);
@@ -32,7 +33,7 @@ class WitnessHandlerProxyTest {
     @Test
     void testNullHandler() {
         handlerProxy = assertDoesNotThrow(() -> new WitnessHandlerProxy(null, connectionStore, node));
-        var expected = new WitnessResponse(false, null);
+        var expected = new Some<>(new WitnessResponse(false, null));
         when(node.id()).thenReturn(PeerUtils.witnessId());
         var conn = new ConnectionImpl(witnessRequest.connectionId(), witnessRequest.sender(), witnessRequest.receiver(), Connection.Status.OPEN);
         conn.lock.writeLock().lock();
@@ -60,7 +61,7 @@ class WitnessHandlerProxyTest {
 
     @Test
     void testUserHandlerRejects() {
-        var expected = new WitnessResponse(true, "test reject");
+        var expected = new Some<>(new WitnessResponse(true, "test reject"));
         when(handler.handle(AddressUtils.defaultAddress(), witnessRequest)).thenReturn(expected);
         assertEquals(expected, handlerProxy.handle(AddressUtils.defaultAddress(), witnessRequest));
         verify(connectionStore, never()).accept(any(), any(), any(), any());

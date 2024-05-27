@@ -9,9 +9,7 @@ import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
 import com.github.arobie1992.clarinet.reputation.Reputation;
 import com.github.arobie1992.clarinet.reputation.ReputationStore;
-import com.github.arobie1992.clarinet.transport.Handler;
-import com.github.arobie1992.clarinet.transport.Transport;
-import com.github.arobie1992.clarinet.transport.TransportOptions;
+import com.github.arobie1992.clarinet.transport.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -196,7 +194,7 @@ class SimpleNode implements Node {
     }
 
     @Override
-    public void addConnectHandler(Handler<ConnectRequest, ConnectResponse> connectHandler) {
+    public void addConnectHandler(ExchangeHandler<ConnectRequest, ConnectResponse> connectHandler) {
         this.transport.addInternal(Endpoints.CONNECT.name(), new ConnectHandlerProxy(connectHandler, connectionStore, this));
     }
 
@@ -206,7 +204,7 @@ class SimpleNode implements Node {
     }
 
     @Override
-    public void addWitnessHandler(Handler<WitnessRequest, WitnessResponse> witnessHandler) {
+    public void addWitnessHandler(ExchangeHandler<WitnessRequest, WitnessResponse> witnessHandler) {
         this.transport.addInternal(Endpoints.WITNESS.name(), new WitnessHandlerProxy(witnessHandler, connectionStore, this));
     }
 
@@ -216,7 +214,7 @@ class SimpleNode implements Node {
     }
 
     @Override
-    public void addWitnessNotificationHandler(Handler<WitnessNotification, Void> witnessNotificationHandler) {
+    public void addWitnessNotificationHandler(SendHandler<WitnessNotification> witnessNotificationHandler) {
         this.transport.addInternal(
                 Endpoints.WITNESS_NOTIFICATION.name(),
                 new WitnessNotificationHandlerProxy(witnessNotificationHandler, connectionStore)
@@ -235,11 +233,11 @@ class SimpleNode implements Node {
         private PeerId id;
         private PeerStore peerStore;
         private Supplier<Transport> transportFactory;
-        private Handler<ConnectRequest, ConnectResponse> connectHandler;
+        private ExchangeHandler<ConnectRequest, ConnectResponse> connectHandler;
         private Function<Stream<? extends Reputation>, Stream<PeerId>> trustFilter;
         private ReputationStore reputationStore;
-        private Handler<WitnessRequest, WitnessResponse> witnessHandler;
-        private Handler<WitnessNotification, Void> witnessNotificationHandler;
+        private ExchangeHandler<WitnessRequest, WitnessResponse> witnessHandler;
+        private SendHandler<WitnessNotification> witnessNotificationHandler;
         private MessageStore messageStore;
         private KeyStore keyStore;
 
@@ -262,7 +260,7 @@ class SimpleNode implements Node {
         }
 
         @Override
-        public NodeBuilder connectHandler(Handler<ConnectRequest, ConnectResponse> connectHandler) {
+        public NodeBuilder connectHandler(ExchangeHandler<ConnectRequest, ConnectResponse> connectHandler) {
             this.connectHandler = connectHandler;
             return this;
         }
@@ -280,13 +278,13 @@ class SimpleNode implements Node {
         }
 
         @Override
-        public NodeBuilder witnessHandler(Handler<WitnessRequest, WitnessResponse> witnessHandler) {
+        public NodeBuilder witnessHandler(ExchangeHandler<WitnessRequest, WitnessResponse> witnessHandler) {
             this.witnessHandler = witnessHandler;
             return this;
         }
 
         @Override
-        public NodeBuilder witnessNotificationHandler(Handler<WitnessNotification, Void> witnessNotificationHandler) {
+        public NodeBuilder witnessNotificationHandler(SendHandler<WitnessNotification> witnessNotificationHandler) {
             this.witnessNotificationHandler = witnessNotificationHandler;
             return this;
         }

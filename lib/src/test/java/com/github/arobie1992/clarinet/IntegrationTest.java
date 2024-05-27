@@ -1,5 +1,6 @@
 package com.github.arobie1992.clarinet;
 
+import com.github.arobie1992.clarinet.adt.None;
 import com.github.arobie1992.clarinet.core.*;
 import com.github.arobie1992.clarinet.impl.inmemory.InMemoryKeyStore;
 import com.github.arobie1992.clarinet.impl.inmemory.InMemoryMessageStore;
@@ -14,7 +15,7 @@ import com.github.arobie1992.clarinet.testutils.PeerUtils;
 import com.github.arobie1992.clarinet.testutils.TestConnection;
 import com.github.arobie1992.clarinet.testutils.TestReputation;
 import com.github.arobie1992.clarinet.testutils.TransportUtils;
-import com.github.arobie1992.clarinet.transport.Handler;
+import com.github.arobie1992.clarinet.transport.SendHandler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,9 +67,9 @@ class IntegrationTest {
     void testCooperative() throws InterruptedException {
         sender.peerStore().save(asPeer(receiver));
         sender.peerStore().save(asPeer(witness));
-        receiver.addWitnessNotificationHandler(new Handler<>() {
+        receiver.addWitnessNotificationHandler(new SendHandler<>() {
             @Override
-            public Void handle(Address remoteAddress, WitnessNotification message) {
+            public None<Void> handle(Address remoteAddress, WitnessNotification message) {
                 sendLatch.countDown();
                 return null;
             }

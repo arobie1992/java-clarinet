@@ -2,6 +2,8 @@ package com.github.arobie1992.clarinet.impl.netty;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.github.arobie1992.clarinet.adt.None;
+import com.github.arobie1992.clarinet.adt.Some;
 import com.github.arobie1992.clarinet.impl.peer.UriAddress;
 import com.github.arobie1992.clarinet.peer.Address;
 import com.github.arobie1992.clarinet.testutils.ReflectionTestUtils;
@@ -36,20 +38,30 @@ import static org.mockito.Mockito.when;
 class NettyTransportTest {
 
     private record Message(String contents) {}
-    private static class TestHandler implements Handler<Message, Object> {
+    private abstract static class TestHandler {
+        Address remoteAddress;
+        Message receivedMessage;
         Function<Message, Object> delegate;
-        private Address remoteAddress;
-        private Message receivedMessage;
 
-        @Override
-        public Object handle(Address remoteAddress, Message message) {
+        Object record(Address remoteAddress, Message message) {
             this.remoteAddress = remoteAddress;
-            receivedMessage = message;
+            this.receivedMessage = message;
             return delegate.apply(message);
         }
-        @Override
+
         public Class<Message> inputType() {
             return Message.class;
+        }
+    }
+    private static class TestExchangeHandler extends TestHandler implements ExchangeHandler<Message, Object> {
+        public Some<Object> handle(Address remoteAddress, Message message) {
+            return new Some<>(record(remoteAddress, message));
+        }
+    }
+    private static class TestSendHandler extends TestHandler implements SendHandler<Message> {
+        public None<Void> handle(Address remoteAddress, Message message) {
+            record(remoteAddress, message);
+            return new None<>();
         }
     }
 
@@ -58,9 +70,9 @@ class NettyTransportTest {
     private final Message message = new Message("message");
     private final Message response = new Message("response");
     private final String exchangeEndpoint = "exchange";
-    private final TestHandler exchangeHandler = new TestHandler();
+    private final TestExchangeHandler exchangeHandler = new TestExchangeHandler();
     private final String sendEndpoint = "send";
-    private final TestHandler sendHandler = new TestHandler();
+    private final TestSendHandler sendHandler = new TestSendHandler();
 
     private Address address;
     private CountDownLatch sendLatch;

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.github.arobie1992.clarinet.adt.Some;
 import com.github.arobie1992.clarinet.core.ConnectionId;
 import com.github.arobie1992.clarinet.impl.peer.UriAddress;
 import com.github.arobie1992.clarinet.peer.PeerId;
@@ -53,8 +54,8 @@ class HandlerDispatcher extends ChannelInboundHandlerAdapter {
         Object contents = objectMapper.readValue(objectMapper.writeValueAsString(message.contents()), handler.inputType());
         var remoteAddr = (InetSocketAddress) ctx.channel().remoteAddress();
         var resp = handler.handle(new UriAddress(new URI("tcp://" + remoteAddr.getHostName() + ":" + remoteAddr.getPort())), contents);
-        if (resp != null) {
-            writeResponse(ctx, resp);
+        if(resp instanceof Some<Object>(Object data)) {
+            writeResponse(ctx, data);
         }
         ctx.close();
     }

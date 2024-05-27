@@ -1,25 +1,26 @@
 package com.github.arobie1992.clarinet.core;
 
+import com.github.arobie1992.clarinet.adt.Some;
 import com.github.arobie1992.clarinet.peer.Address;
-import com.github.arobie1992.clarinet.transport.Handler;
+import com.github.arobie1992.clarinet.transport.ExchangeHandler;
 
 import java.util.Objects;
 
-class ConnectHandlerProxy implements Handler<ConnectRequest, ConnectResponse> {
-    private final Handler<ConnectRequest, ConnectResponse> userHandler;
+class ConnectHandlerProxy implements ExchangeHandler<ConnectRequest, ConnectResponse> {
+    private final ExchangeHandler<ConnectRequest, ConnectResponse> userHandler;
     private final ConnectionStore connectionStore;
     private final Node node;
 
-    ConnectHandlerProxy(Handler<ConnectRequest, ConnectResponse> userHandler, ConnectionStore connectionStore, Node node) {
+    ConnectHandlerProxy(ExchangeHandler<ConnectRequest, ConnectResponse> userHandler, ConnectionStore connectionStore, Node node) {
         this.userHandler = userHandler == null ? DEFAULT_HANDLER : userHandler;
         this.connectionStore = Objects.requireNonNull(connectionStore);
         this.node = Objects.requireNonNull(node);
     }
 
     @Override
-    public ConnectResponse handle(Address remoteAddress, ConnectRequest message) {
+    public Some<ConnectResponse> handle(Address remoteAddress, ConnectRequest message) {
         var resp = Objects.requireNonNull(userHandler.handle(remoteAddress, message), "User handler returned a null ConnectResponse");
-        if(!resp.rejected()) {
+        if(!resp.value().rejected()) {
             connectionStore.accept(message.connectionId(), message.sender(), node.id(), Connection.Status.AWAITING_WITNESS);
         }
 
@@ -31,10 +32,10 @@ class ConnectHandlerProxy implements Handler<ConnectRequest, ConnectResponse> {
         return userHandler.inputType();
     }
 
-    private static final Handler<ConnectRequest, ConnectResponse> DEFAULT_HANDLER = new Handler<>() {
+    private static final ExchangeHandler<ConnectRequest, ConnectResponse> DEFAULT_HANDLER = new ExchangeHandler<>() {
         @Override
-        public ConnectResponse handle(Address address, ConnectRequest message) {
-            return new ConnectResponse(false, null);
+        public Some<ConnectResponse> handle(Address address, ConnectRequest message) {
+            return new Some<>(new ConnectResponse(false, null));
         }
 
         @Override

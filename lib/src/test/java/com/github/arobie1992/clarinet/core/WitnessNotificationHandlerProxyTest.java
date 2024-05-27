@@ -3,7 +3,7 @@ package com.github.arobie1992.clarinet.core;
 import com.github.arobie1992.clarinet.testutils.AddressUtils;
 import com.github.arobie1992.clarinet.testutils.PeerUtils;
 import com.github.arobie1992.clarinet.testutils.TestConnection;
-import com.github.arobie1992.clarinet.transport.Handler;
+import com.github.arobie1992.clarinet.transport.SendHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -16,17 +16,16 @@ class WitnessNotificationHandlerProxyTest {
 
     private final WitnessNotification witnessNotification = new WitnessNotification(ConnectionId.random(), PeerUtils.witnessId());
 
-    private Handler<WitnessNotification, Void> handler;
+    private SendHandler<WitnessNotification> handler;
     private ConnectionStore connectionStore;
     private WitnessNotificationHandlerProxy handlerProxy;
     private ConnectionImpl connection;
-    private WriteableReference connectionRef;
     private TestConnection expected;
 
     @BeforeEach
     public void setUp() {
         //noinspection unchecked
-        handler = (Handler<WitnessNotification, Void>) mock(Handler.class);
+        handler = (SendHandler<WitnessNotification>) mock(SendHandler.class);
         connectionStore = mock(ConnectionStore.class);
         handlerProxy = new WitnessNotificationHandlerProxy(handler, connectionStore);
         connection = new ConnectionImpl(
@@ -36,8 +35,7 @@ class WitnessNotificationHandlerProxyTest {
                 Connection.Status.AWAITING_WITNESS
         );
         connection.lock.writeLock().lock();
-        connectionRef = new Writeable(connection);
-        when(connectionStore.findForWrite(witnessNotification.connectionId())).thenReturn(connectionRef);
+        when(connectionStore.findForWrite(witnessNotification.connectionId())).thenReturn(new Writeable(connection));
         expected = new TestConnection(
                 connection.id(),
                 connection.sender(),

@@ -6,7 +6,8 @@ import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
 import com.github.arobie1992.clarinet.reputation.Reputation;
 import com.github.arobie1992.clarinet.reputation.ReputationStore;
-import com.github.arobie1992.clarinet.transport.Handler;
+import com.github.arobie1992.clarinet.transport.ExchangeHandler;
+import com.github.arobie1992.clarinet.transport.SendHandler;
 import com.github.arobie1992.clarinet.transport.Transport;
 
 import java.util.function.Function;
@@ -37,7 +38,7 @@ public interface NodeBuilder {
      * @param connectHandler The handler implementing the user-desired behavior.
      * @return {@code this} builder for fluent building.
      */
-    NodeBuilder connectHandler(Handler<ConnectRequest, ConnectResponse> connectHandler);
+    NodeBuilder connectHandler(ExchangeHandler<ConnectRequest, ConnectResponse> connectHandler);
     NodeBuilder trustFilter(Function<Stream<? extends Reputation>, Stream<PeerId>> trustFunction);
     NodeBuilder reputationStore(ReputationStore reputationStore);
 
@@ -50,7 +51,7 @@ public interface NodeBuilder {
      * @param witnessHandler The handler implementing the user-desired behavior.
      * @return {@code this} builder for fluent building.
      */
-    NodeBuilder witnessHandler(Handler<WitnessRequest, WitnessResponse> witnessHandler);
+    NodeBuilder witnessHandler(ExchangeHandler<WitnessRequest, WitnessResponse> witnessHandler);
 
     /**
      * User-defined behavior for dealing with witness notifications.
@@ -59,7 +60,7 @@ public interface NodeBuilder {
      * @param witnessNotificationHandler The handler implementing the user-desired behavior.
      * @return {@code this} builder for fluent building.
      */
-    NodeBuilder witnessNotificationHandler(Handler<WitnessNotification, Void> witnessNotificationHandler);
+    NodeBuilder witnessNotificationHandler(SendHandler<WitnessNotification> witnessNotificationHandler);
 
     NodeBuilder messageStore(MessageStore messageStore);
 

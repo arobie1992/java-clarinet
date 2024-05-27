@@ -2,7 +2,7 @@ package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.testutils.AddressUtils;
 import com.github.arobie1992.clarinet.testutils.TransportUtils;
-import com.github.arobie1992.clarinet.transport.Handler;
+import com.github.arobie1992.clarinet.transport.ExchangeHandler;
 import com.github.arobie1992.clarinet.transport.Transport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,7 +50,7 @@ class TransportProxyTest {
     @ParameterizedTest
     @MethodSource("endpoints")
     void testAddHandler(String endpoint) {
-        var handler = mock(Handler.class);
+        var handler = mock(ExchangeHandler.class);
         if(Endpoints.isEndpoint(endpoint)) {
             var ex = assertThrows(IllegalArgumentException.class, () -> transportProxy.add(endpoint, handler));
             assertEquals("Please use the node-level operations for altering protocol-required endpoint: " + endpoint, ex.getMessage());
@@ -63,7 +63,7 @@ class TransportProxyTest {
     @ParameterizedTest
     @MethodSource("endpoints")
     void testAddInternal(String endpoint) {
-        var handler = mock(Handler.class);
+        var handler = mock(ExchangeHandler.class);
         assertDoesNotThrow(() -> transportProxy.addInternal(endpoint, handler));
         verify(transport).add(endpoint, handler);
     }
@@ -75,7 +75,7 @@ class TransportProxyTest {
             var ex = assertThrows(IllegalArgumentException.class, () -> transportProxy.remove(endpoint));
             assertEquals("Please use the node-level operations for altering protocol-required endpoint: " + endpoint, ex.getMessage());
         } else {
-            var handler = mock(Handler.class);
+            var handler = mock(ExchangeHandler.class);
             //noinspection unchecked
             when(transport.remove(endpoint)).thenReturn(Optional.of(handler));
             var removed = assertDoesNotThrow(() -> transportProxy.remove(endpoint));
