@@ -7,7 +7,7 @@ import com.github.arobie1992.clarinet.core.ConnectionId;
 
 import java.io.IOException;
 
-class ConnectionIdSerializer extends JsonSerializer<ConnectionId> {
+public class ConnectionIdSerializer extends JsonSerializer<ConnectionId> {
     @Override
     public void serialize(ConnectionId value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
         gen.writeString(value.toString());

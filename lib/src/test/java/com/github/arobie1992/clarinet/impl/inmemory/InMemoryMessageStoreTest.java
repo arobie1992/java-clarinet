@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class InMemoryMessageStoreTest {
 
-    private final DataMessage message = new DataMessage(new MessageId(ConnectionId.random(), 0), "");
+    private final DataMessage message = new DataMessage(new MessageId(ConnectionId.random(), 0), new byte[]{0,2,3,4});
     private InMemoryMessageStore store;
 
     @BeforeEach

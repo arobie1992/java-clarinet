@@ -1,6 +1,13 @@
 package com.github.arobie1992.clarinet.core;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.github.arobie1992.clarinet.crypto.KeyStore;
+import com.github.arobie1992.clarinet.crypto.SigningException;
+import com.github.arobie1992.clarinet.impl.netty.ConnectionIdSerializer;
+import com.github.arobie1992.clarinet.impl.netty.PeerIdSerializer;
 import com.github.arobie1992.clarinet.message.DataMessage;
 import com.github.arobie1992.clarinet.message.MessageId;
 import com.github.arobie1992.clarinet.message.MessageStore;
@@ -9,10 +16,14 @@ import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
 import com.github.arobie1992.clarinet.reputation.Reputation;
 import com.github.arobie1992.clarinet.reputation.ReputationStore;
-import com.github.arobie1992.clarinet.transport.*;
+import com.github.arobie1992.clarinet.transport.ExchangeHandler;
+import com.github.arobie1992.clarinet.transport.SendHandler;
+import com.github.arobie1992.clarinet.transport.Transport;
+import com.github.arobie1992.clarinet.transport.TransportOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.UncheckedIOException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
@@ -32,6 +43,7 @@ class SimpleNode implements Node {
     private final ReputationStore reputationStore;
     private final MessageStore messageStore;
     private final KeyStore keyStore;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private SimpleNode(Builder builder) {
         this.id = Objects.requireNonNull(builder.id, "id");
@@ -47,6 +59,11 @@ class SimpleNode implements Node {
         this.reputationStore = Objects.requireNonNull(builder.reputationStore, "reputationStore");
         this.messageStore = Objects.requireNonNull(builder.messageStore, "messageStore");
         this.keyStore = Objects.requireNonNull(builder.keyStore, "keyStore");
+        var module = new SimpleModule();
+        module.addSerializer(PeerId.class, new PeerIdSerializer());
+        module.addSerializer(ConnectionId.class, new ConnectionIdSerializer());
+        objectMapper.registerModule(module);
+        objectMapper.registerModule(new Jdk8Module());
     }
 
     @Override
@@ -186,10 +203,26 @@ class SimpleNode implements Node {
             if(!(ref instanceof Writeable(ConnectionImpl connection))) {
                 throw new NoSuchConnectionException(connectionId);
             }
+            if(!connection.status().equals(Connection.Status.OPEN)) {
+                throw new RuntimeException("Cannot send on unopen connection");
+            }
             var messageId = new MessageId(connectionId, connection.nextSequenceNumber());
-            var message = new DataMessage(messageId, new String(data));
+            var message = new DataMessage(messageId, data);
+            var serialized = objectMapper.writeValueAsBytes(message.senderParts());
+            var senderSig = keyStore.findPrivateKeys(id).stream().map(k -> {
+                try {
+                    return k.sign(serialized);
+                } catch(SigningException e) {
+                    log.info("Encountered error while attempting to sign", e);
+                    // TODO error handler here too
+                    return null;
+                }
+            }).filter(Objects::nonNull).findFirst().orElseThrow(() -> new SigningException("Failed to sign message"));
+            message.setSenderSignature(senderSig);
             messageStore.add(message);
             return message.messageId();
+        } catch (JsonProcessingException e) {
+            throw new UncheckedIOException(e);
         }
     }
 

@@ -1,15 +1,23 @@
 package com.github.arobie1992.clarinet;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.github.arobie1992.clarinet.adt.None;
 import com.github.arobie1992.clarinet.core.*;
+import com.github.arobie1992.clarinet.impl.crypto.Keys;
 import com.github.arobie1992.clarinet.impl.inmemory.InMemoryKeyStore;
 import com.github.arobie1992.clarinet.impl.inmemory.InMemoryMessageStore;
 import com.github.arobie1992.clarinet.impl.inmemory.InMemoryPeerStore;
 import com.github.arobie1992.clarinet.impl.inmemory.InMemoryReputationStore;
+import com.github.arobie1992.clarinet.impl.netty.ConnectionIdSerializer;
 import com.github.arobie1992.clarinet.impl.netty.NettyTransport;
+import com.github.arobie1992.clarinet.impl.netty.PeerIdSerializer;
 import com.github.arobie1992.clarinet.impl.peer.UriAddress;
 import com.github.arobie1992.clarinet.peer.Address;
 import com.github.arobie1992.clarinet.peer.Peer;
+import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.reputation.TrustFilters;
 import com.github.arobie1992.clarinet.testutils.PeerUtils;
 import com.github.arobie1992.clarinet.testutils.TestConnection;
@@ -22,6 +30,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.security.NoSuchAlgorithmException;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 
@@ -29,11 +38,21 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class IntegrationTest {
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     private Node sender, witness, receiver;
     private CountDownLatch sendLatch;
 
+    IntegrationTest() {
+        var module = new SimpleModule();
+        module.addSerializer(PeerId.class, new PeerIdSerializer());
+        module.addSerializer(ConnectionId.class, new ConnectionIdSerializer());
+        objectMapper.registerModule(module);
+        objectMapper.registerModule(new Jdk8Module());
+    }
+
     @BeforeEach
-    void setUp() throws URISyntaxException {
+    void setUp() throws URISyntaxException, NoSuchAlgorithmException {
         sender = Nodes.newBuilder().id(PeerUtils.senderId())
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(TransportUtils.defaultOptions()))
@@ -42,6 +61,9 @@ class IntegrationTest {
                 .messageStore(new InMemoryMessageStore())
                 .keyStore(new InMemoryKeyStore())
                 .build();
+        var senderKeys = Keys.generateKeyPair();
+        sender.keyStore().addPrivateKey(sender.id(), senderKeys.privateKey());
+        sender.keyStore().addPublicKey(sender.id(), senderKeys.publicKey());
         witness = Nodes.newBuilder().id(PeerUtils.witnessId())
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(TransportUtils.defaultOptions()))
@@ -64,7 +86,7 @@ class IntegrationTest {
     }
 
     @Test
-    void testCooperative() throws InterruptedException {
+    void testCooperative() throws InterruptedException, JsonProcessingException {
         sender.peerStore().save(asPeer(receiver));
         sender.peerStore().save(asPeer(witness));
         receiver.addWitnessNotificationHandler(new SendHandler<>() {
@@ -95,12 +117,14 @@ class IntegrationTest {
         var messageOpt = sender.messageStore().find(messageId);
         assertTrue(messageOpt.isPresent());
         var message = messageOpt.get();
-        assertEquals(new String(data), message.data());
+        assertArrayEquals(data, message.data());
         assertEquals(connectionId, message.messageId().connectionId());
         assertEquals(0, message.messageId().sequenceNumber());
         var pubKeys = sender.keyStore().findPublicKeys(sender.id());
-        assertFalse(pubKeys.isEmpty());
-//        assertTrue(verifySender(message, pubKeyOpt.get()));
+        assertEquals(1, pubKeys.size());
+        var bytes = objectMapper.writeValueAsBytes(message.senderParts());
+        var key = pubKeys.iterator().next();
+        assertTrue(key.verify(bytes, message.senderSignature().orElseThrow()));
 
         fail("test for witness and receiver");
         fail("Test reputation, and querying");
