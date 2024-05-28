@@ -1,5 +1,6 @@
 package com.github.arobie1992.clarinet.impl.inmemory;
 
+import com.github.arobie1992.clarinet.crypto.KeyPair;
 import com.github.arobie1992.clarinet.crypto.KeyStore;
 import com.github.arobie1992.clarinet.crypto.PrivateKey;
 import com.github.arobie1992.clarinet.crypto.PublicKey;
@@ -14,6 +15,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class InMemoryKeyStore implements KeyStore {
     private final Map<PeerId, Collection<PrivateKey>> privKeys = new ConcurrentHashMap<>();
     private final Map<PeerId, Collection<PublicKey>> pubKeys = new ConcurrentHashMap<>();
+
+    @Override
+    public void addKeyPair(PeerId peerId, KeyPair keyPair) {
+        addPrivateKey(peerId, keyPair.privateKey());
+        addPublicKey(peerId, keyPair.publicKey());
+    }
 
     @Override
     public void addPrivateKey(PeerId peerId, PrivateKey privateKey) {

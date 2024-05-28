@@ -3,7 +3,8 @@ package com.github.arobie1992.clarinet.core;
 public enum Endpoints {
     CONNECT,
     WITNESS,
-    WITNESS_NOTIFICATION;
+    WITNESS_NOTIFICATION,
+    MESSAGE;
 
     static boolean isEndpoint(String endpoint) {
         for (Endpoints e : Endpoints.values()) {

@@ -1,5 +1,6 @@
 package com.github.arobie1992.clarinet.impl.inmemory;
 
+import com.github.arobie1992.clarinet.crypto.KeyPair;
 import com.github.arobie1992.clarinet.crypto.PrivateKey;
 import com.github.arobie1992.clarinet.crypto.PublicKey;
 import com.github.arobie1992.clarinet.testutils.PeerUtils;
@@ -32,6 +33,14 @@ class InMemoryKeyStoreTest {
     @BeforeEach
     void setUp() {
         store = new InMemoryKeyStore();
+    }
+
+    @Test
+    void testAddKeyPair() {
+        var pair = new KeyPair(new TestPublicKey(1), new TestPrivateKey(2));
+        store.addKeyPair(PeerUtils.senderId(), pair);
+        assertEquals(List.of(pair.publicKey()), store.findPublicKeys(PeerUtils.senderId()));
+        assertEquals(List.of(pair.privateKey()), store.findPrivateKeys(PeerUtils.senderId()));
     }
 
     @Test

@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.UncheckedIOException;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
@@ -55,6 +56,7 @@ class SimpleNode implements Node {
                 Endpoints.WITNESS_NOTIFICATION.name(),
                 new WitnessNotificationHandlerProxy(builder.witnessNotificationHandler, connectionStore)
         );
+        this.transport.addInternal(Endpoints.MESSAGE.name(), new MessageHandlerProxy(builder.messageHandler, connectionStore, this));
         this.trustFilter = Objects.requireNonNull(builder.trustFilter, "trustFilter");
         this.reputationStore = Objects.requireNonNull(builder.reputationStore, "reputationStore");
         this.messageStore = Objects.requireNonNull(builder.messageStore, "messageStore");
@@ -132,6 +134,11 @@ class SimpleNode implements Node {
         throw new PeerSendException(peer.id());
     }
 
+    void sendInternal(PeerId peerId, DataMessage message, TransportOptions transportOptions) {
+        var peer = peerStore().find(peerId).orElseThrow(() -> new NoSuchPeerException(peerId));
+        sendForPeer(peer, Endpoints.MESSAGE.name(), message, transportOptions);
+    }
+
     @Override
     public ConnectionId connect(PeerId receiver, ConnectionOptions connectionOptions, TransportOptions transportOptions) {
         var connectionId = connectionStore.create(id(), receiver, Connection.Status.REQUESTING_RECEIVER);
@@ -197,32 +204,41 @@ class SimpleNode implements Node {
         return connectionId;
     }
 
+    byte[] genSignature(Object parts) {
+        byte[] serialized;
+        try {
+            serialized = objectMapper.writeValueAsBytes(parts);
+        } catch (JsonProcessingException e) {
+            throw new UncheckedIOException(e);
+        }
+        // java closure rules :\
+        final byte[] finalSerialized = serialized;
+        return keyStore.findPrivateKeys(id).stream().map(k -> {
+            try {
+                return k.sign(finalSerialized);
+            } catch(SigningException e) {
+                log.info("Encountered error while attempting to sign", e);
+                // TODO error handler here too
+                return null;
+            }
+        }).filter(Objects::nonNull).findFirst().orElseThrow(() -> new SigningException("Failed to sign message"));
+    }
+
     @Override
-    public MessageId send(ConnectionId connectionId, byte[] data) {
+    public MessageId send(ConnectionId connectionId, byte[] data, TransportOptions transportOptions) {
         try(var ref = connectionStore.findForWrite(connectionId)) {
             if(!(ref instanceof Writeable(ConnectionImpl connection))) {
                 throw new NoSuchConnectionException(connectionId);
             }
             if(!connection.status().equals(Connection.Status.OPEN)) {
-                throw new RuntimeException("Cannot send on unopen connection");
+                throw new ConnectionStatusException(connectionId, "send", connection.status(), List.of(Connection.Status.OPEN));
             }
             var messageId = new MessageId(connectionId, connection.nextSequenceNumber());
             var message = new DataMessage(messageId, data);
-            var serialized = objectMapper.writeValueAsBytes(message.senderParts());
-            var senderSig = keyStore.findPrivateKeys(id).stream().map(k -> {
-                try {
-                    return k.sign(serialized);
-                } catch(SigningException e) {
-                    log.info("Encountered error while attempting to sign", e);
-                    // TODO error handler here too
-                    return null;
-                }
-            }).filter(Objects::nonNull).findFirst().orElseThrow(() -> new SigningException("Failed to sign message"));
-            message.setSenderSignature(senderSig);
+            message.setSenderSignature(genSignature(message.senderParts()));
             messageStore.add(message);
+            sendInternal(connection.witness().orElseThrow(), message, transportOptions);
             return message.messageId();
-        } catch (JsonProcessingException e) {
-            throw new UncheckedIOException(e);
         }
     }
 
@@ -273,6 +289,7 @@ class SimpleNode implements Node {
         private SendHandler<WitnessNotification> witnessNotificationHandler;
         private MessageStore messageStore;
         private KeyStore keyStore;
+        private SendHandler<DataMessage> messageHandler;
 
         @Override
         public NodeBuilder id(PeerId id) {
@@ -331,6 +348,12 @@ class SimpleNode implements Node {
         @Override
         public NodeBuilder keyStore(KeyStore keyStore) {
             this.keyStore = keyStore;
+            return this;
+        }
+
+        @Override
+        public NodeBuilder messageHandler(SendHandler<DataMessage> messageHandler) {
+            this.messageHandler = messageHandler;
             return this;
         }
 

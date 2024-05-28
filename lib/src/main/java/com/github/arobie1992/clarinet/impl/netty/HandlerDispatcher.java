@@ -1,5 +1,7 @@
 package com.github.arobie1992.clarinet.impl.netty;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
@@ -7,6 +9,7 @@ import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.github.arobie1992.clarinet.adt.Some;
 import com.github.arobie1992.clarinet.core.ConnectionId;
 import com.github.arobie1992.clarinet.impl.peer.UriAddress;
+import com.github.arobie1992.clarinet.message.DataMessage;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.transport.ErrorResponse;
 import com.github.arobie1992.clarinet.transport.Handler;
@@ -34,8 +37,10 @@ class HandlerDispatcher extends ChannelInboundHandlerAdapter {
         var module = new SimpleModule();
         module.addDeserializer(PeerId.class, new PeerIdDeserializer());
         module.addDeserializer(ConnectionId.class, new ConnectionIdDeserializer());
+        module.addDeserializer(DataMessage.class, new DataMessageDeserializer());
         objectMapper.registerModule(module);
         objectMapper.registerModule(new Jdk8Module());
+        objectMapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
     }
 
     @Override

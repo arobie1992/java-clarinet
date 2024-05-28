@@ -65,9 +65,8 @@ class IntegrationTest {
                 .messageStore(new InMemoryMessageStore())
                 .keyStore(new InMemoryKeyStore())
                 .build();
-        var senderKeys = Keys.generateKeyPair();
-        sender.keyStore().addPrivateKey(sender.id(), senderKeys.privateKey());
-        sender.keyStore().addPublicKey(sender.id(), senderKeys.publicKey());
+        sender.keyStore().addKeyPair(sender.id(), Keys.generateKeyPair());
+
         witness = Nodes.newBuilder().id(PeerUtils.witnessId())
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(TransportUtils.defaultOptions()))
@@ -77,6 +76,8 @@ class IntegrationTest {
                 .keyStore(new InMemoryKeyStore())
                 .build();
         witness.transport().add(new UriAddress(new URI("tcp://localhost:0")));
+        witness.keyStore().addKeyPair(witness.id(), Keys.generateKeyPair());
+
         receiver = Nodes.newBuilder().id(PeerUtils.receiverId())
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(TransportUtils.defaultOptions()))
@@ -117,12 +118,11 @@ class IntegrationTest {
 
         // sending a message
         var data = new byte[]{0, 1, 2, 3, 4};
-        var messageId = sender.send(connectionId, data);
+        var messageId = sender.send(connectionId, data, TransportUtils.defaultOptions());
         verifyMessage(sender, messageId, 0, data, MessageVerificationMode.SENDER_ONLY);
         verifyMessage(witness, messageId, 0, data, MessageVerificationMode.SENDER_AND_WITNESS);
         verifyMessage(receiver, messageId, 0, data, MessageVerificationMode.SENDER_AND_WITNESS);
 
-        fail("test for witness and receiver");
         fail("Test reputation, and querying");
 
         // sender querying message
@@ -239,7 +239,7 @@ class IntegrationTest {
             MessageId messageId,
             @SuppressWarnings("SameParameterValue") long seqNo,
             byte[] data,
-            @SuppressWarnings("SameParameterValue") MessageVerificationMode mode
+            MessageVerificationMode mode
     ) throws JsonProcessingException {
         try(var ref = node.findConnection(messageId.connectionId())) {
             if(!(ref instanceof Connection.Readable(Connection connection))) {

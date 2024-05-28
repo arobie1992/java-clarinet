@@ -35,7 +35,7 @@ public interface Node {
      */
     ConnectionId connect(PeerId receiver, ConnectionOptions connectionOptions, TransportOptions transportOptions);
 
-    MessageId send(ConnectionId connectionId, byte[] data);
+    MessageId send(ConnectionId connectionId, byte[] data, TransportOptions transportOptions);
 
     void addConnectHandler(ExchangeHandler<ConnectRequest, ConnectResponse> connectHandler);
 
