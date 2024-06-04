@@ -49,18 +49,21 @@ class SimpleNode implements Node {
     private SimpleNode(Builder builder) {
         this.id = Objects.requireNonNull(builder.id, "id");
         this.peerStore = Objects.requireNonNull(builder.peerStore, "peerStore");
+
         this.transport = new TransportProxy(Objects.requireNonNull(builder.transportFactory.get()));
         this.transport.addInternal(Endpoints.CONNECT.name(), new ConnectHandlerProxy(builder.connectHandler, connectionStore, this));
         this.transport.addInternal(Endpoints.WITNESS.name(), new WitnessHandlerProxy(builder.witnessHandler, connectionStore, this));
         this.transport.addInternal(
                 Endpoints.WITNESS_NOTIFICATION.name(),
-                new WitnessNotificationHandlerProxy(builder.witnessNotificationHandler, connectionStore)
+                new WitnessNotificationHandlerProxy(builder.witnessNotificationHandler, connectionStore, this)
         );
         this.transport.addInternal(Endpoints.MESSAGE.name(), new MessageHandlerProxy(builder.messageHandler, connectionStore, this));
+
         this.trustFilter = Objects.requireNonNull(builder.trustFilter, "trustFilter");
         this.reputationStore = Objects.requireNonNull(builder.reputationStore, "reputationStore");
         this.messageStore = Objects.requireNonNull(builder.messageStore, "messageStore");
         this.keyStore = Objects.requireNonNull(builder.keyStore, "keyStore");
+
         var module = new SimpleModule();
         module.addSerializer(PeerId.class, new PeerIdSerializer());
         module.addSerializer(ConnectionId.class, new ConnectionIdSerializer());
@@ -243,6 +246,14 @@ class SimpleNode implements Node {
     }
 
     @Override
+    public PeersResponse requestPeers(PeerId requestee, PeersRequest request, TransportOptions transportOptions) {
+        var peer = peerStore.find(requestee).orElseThrow(() -> new NoSuchPeerException(requestee));
+        return exchangeForPeer(peer, Endpoints.REQUEST_PEERS.name(), request, PeersResponse.class, transportOptions)
+                .findFirst()
+                .orElseThrow(() -> new PeersRequestException(requestee));
+    }
+
+    @Override
     public void addConnectHandler(ExchangeHandler<ConnectRequest, ConnectResponse> connectHandler) {
         this.transport.addInternal(Endpoints.CONNECT.name(), new ConnectHandlerProxy(connectHandler, connectionStore, this));
     }
@@ -266,7 +277,7 @@ class SimpleNode implements Node {
     public void addWitnessNotificationHandler(SendHandler<WitnessNotification> witnessNotificationHandler) {
         this.transport.addInternal(
                 Endpoints.WITNESS_NOTIFICATION.name(),
-                new WitnessNotificationHandlerProxy(witnessNotificationHandler, connectionStore)
+                new WitnessNotificationHandlerProxy(witnessNotificationHandler, connectionStore, this)
         );
     }
 
@@ -274,7 +285,7 @@ class SimpleNode implements Node {
     public void removeWitnessNotificationHandler() {
         this.transport.addInternal(
                 Endpoints.WITNESS_NOTIFICATION.name(),
-                new WitnessNotificationHandlerProxy(null, connectionStore)
+                new WitnessNotificationHandlerProxy(null, connectionStore, this)
         );
     }
 

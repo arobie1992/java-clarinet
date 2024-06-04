@@ -1,8 +1,8 @@
 package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.adt.Some;
-import com.github.arobie1992.clarinet.peer.Address;
 import com.github.arobie1992.clarinet.transport.ExchangeHandler;
+import com.github.arobie1992.clarinet.transport.RemoteInformation;
 
 import java.util.Objects;
 
@@ -18,8 +18,12 @@ class WitnessHandlerProxy implements ExchangeHandler<WitnessRequest, WitnessResp
     }
 
     @Override
-    public Some<WitnessResponse> handle(Address remoteAddress, WitnessRequest message) {
-        var resp = Objects.requireNonNull(userHandler.handle(remoteAddress, message), "User handler returned a null WitnessResponse");
+    public Some<WitnessResponse> handle(RemoteInformation remoteInformation, WitnessRequest message) {
+        var peer = node.peerStore().find(remoteInformation.peer().id()).orElse(remoteInformation.peer());
+        peer.addresses().addAll(remoteInformation.peer().addresses());
+        node.peerStore().save(peer);
+
+        var resp = Objects.requireNonNull(userHandler.handle(remoteInformation, message), "User handler returned a null WitnessResponse");
         if(!resp.value().rejected()) {
             connectionStore.accept(message.connectionId(), message.sender(), message.receiver(), Connection.Status.OPEN);
             try(var ref = connectionStore.findForWrite(message.connectionId())) {
@@ -41,7 +45,7 @@ class WitnessHandlerProxy implements ExchangeHandler<WitnessRequest, WitnessResp
 
     private static final ExchangeHandler<WitnessRequest, WitnessResponse> DEFAULT_HANDLER = new ExchangeHandler<>() {
         @Override
-        public Some<WitnessResponse> handle(Address address, WitnessRequest message) {
+        public Some<WitnessResponse> handle(RemoteInformation remoteInformation, WitnessRequest message) {
             return new Some<>(new WitnessResponse(false, null));
         }
 

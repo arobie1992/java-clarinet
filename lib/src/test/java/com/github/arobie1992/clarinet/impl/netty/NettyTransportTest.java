@@ -1,11 +1,15 @@
 package com.github.arobie1992.clarinet.impl.netty;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.github.arobie1992.clarinet.adt.None;
 import com.github.arobie1992.clarinet.adt.Some;
 import com.github.arobie1992.clarinet.impl.peer.UriAddress;
 import com.github.arobie1992.clarinet.peer.Address;
+import com.github.arobie1992.clarinet.peer.Peer;
+import com.github.arobie1992.clarinet.peer.PeerId;
+import com.github.arobie1992.clarinet.testutils.PeerUtils;
 import com.github.arobie1992.clarinet.testutils.ReflectionTestUtils;
 import com.github.arobie1992.clarinet.testutils.ThreadUtils;
 import com.github.arobie1992.clarinet.testutils.TransportUtils;
@@ -27,7 +31,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -37,38 +43,38 @@ import static org.mockito.Mockito.when;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class NettyTransportTest {
 
-    private record Message(String contents) {}
+    private record TestMessage(String contents) {}
     private abstract static class TestHandler {
-        Address remoteAddress;
-        Message receivedMessage;
-        Function<Message, Object> delegate;
+        RemoteInformation remoteInformation;
+        TestMessage receivedMessage;
+        Function<TestMessage, Object> delegate;
 
-        Object record(Address remoteAddress, Message message) {
-            this.remoteAddress = remoteAddress;
+        Object record(RemoteInformation remoteInformation, TestMessage message) {
+            this.remoteInformation = remoteInformation;
             this.receivedMessage = message;
             return delegate.apply(message);
         }
 
-        public Class<Message> inputType() {
-            return Message.class;
+        public Class<TestMessage> inputType() {
+            return TestMessage.class;
         }
     }
-    private static class TestExchangeHandler extends TestHandler implements ExchangeHandler<Message, Object> {
-        public Some<Object> handle(Address remoteAddress, Message message) {
-            return new Some<>(record(remoteAddress, message));
+    private static class TestExchangeHandler extends TestHandler implements ExchangeHandler<TestMessage, Object> {
+        public Some<Object> handle(RemoteInformation remoteInformation, TestMessage message) {
+            return new Some<>(record(remoteInformation, message));
         }
     }
-    private static class TestSendHandler extends TestHandler implements SendHandler<Message> {
-        public None<Void> handle(Address remoteAddress, Message message) {
-            record(remoteAddress, message);
+    private static class TestSendHandler extends TestHandler implements SendHandler<TestMessage> {
+        public None<Void> handle(RemoteInformation remoteInformation, TestMessage message) {
+            record(remoteInformation, message);
             return new None<>();
         }
     }
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final NettyTransport transport = new NettyTransport(TransportUtils.defaultOptions());
-    private final Message message = new Message("message");
-    private final Message response = new Message("response");
+    private final NettyTransport transport = new NettyTransport(PeerUtils.senderId(), TransportUtils.defaultOptions());
+    private final TestMessage message = new TestMessage("message");
+    private final TestMessage response = new TestMessage("response");
     private final String exchangeEndpoint = "exchange";
     private final TestExchangeHandler exchangeHandler = new TestExchangeHandler();
     private final String sendEndpoint = "send";
@@ -78,6 +84,10 @@ class NettyTransportTest {
     private CountDownLatch sendLatch;
 
     NettyTransportTest() {
+        var module = new SimpleModule();
+        module.addSerializer(PeerId.class, new PeerIdSerializer());
+        module.addSerializer(Address.class, new AddressSerializer());
+        objectMapper.registerModule(module);
         objectMapper.registerModule(new Jdk8Module());
     }
 
@@ -85,12 +95,12 @@ class NettyTransportTest {
     void setUp() throws URISyntaxException {
         address = transport.add(new UriAddress(new URI("tcp://localhost:0")));
 
-        exchangeHandler.remoteAddress = null;
+        exchangeHandler.remoteInformation = null;
         exchangeHandler.receivedMessage = null;
         exchangeHandler.delegate = ignoredMessage -> response;
         transport.add(exchangeEndpoint, exchangeHandler);
 
-        sendHandler.remoteAddress = null;
+        sendHandler.remoteInformation = null;
         sendHandler.receivedMessage = null;
         sendLatch = new CountDownLatch(1);
         sendHandler.delegate = ignoredMessage -> {
@@ -110,7 +120,7 @@ class NettyTransportTest {
     @Test
     void testExchange() {
         // just send to itself because there's no reason it shouldn't work
-        var resp = transport.exchange(address, exchangeEndpoint, message, Message.class, TransportUtils.defaultOptions());
+        var resp = transport.exchange(address, exchangeEndpoint, message, TestMessage.class, TransportUtils.defaultOptions());
         assertEquals(message, exchangeHandler.receivedMessage);
         assertEquals(response, resp);
     }
@@ -120,7 +130,7 @@ class NettyTransportTest {
         // just send to itself because there's no reason it shouldn't work
         transport.send(address, sendEndpoint, message, TransportUtils.defaultOptions());
         // need to wait for the send to complete so that the cleanup doesn't remove the handlers before the dispatcher starts
-        sendLatch.await();
+        assertTrue(sendLatch.await(1, TimeUnit.SECONDS));
         assertEquals(message, sendHandler.receivedMessage);
     }
 
@@ -129,7 +139,7 @@ class NettyTransportTest {
         var address = new UriAddress(new URI("udp://localhost"));
         var ex = assertThrows(
                 IllegalArgumentException.class,
-                () -> transport.exchange(address, exchangeEndpoint, message, Message.class, TransportUtils.defaultOptions())
+                () -> transport.exchange(address, exchangeEndpoint, message, TestMessage.class, TransportUtils.defaultOptions())
         );
         assertEquals("Address is not a tcp address: " + address, ex.getMessage());
     }
@@ -150,7 +160,7 @@ class NettyTransportTest {
         var address = new UriAddress(new URI("tcp://localhost:9999"));
         assertThrows(
                 UncheckedIOException.class,
-                () -> transport.exchange(address, exchangeEndpoint, message, Message.class, TransportUtils.defaultOptions())
+                () -> transport.exchange(address, exchangeEndpoint, message, TestMessage.class, TransportUtils.defaultOptions())
         );
     }
 
@@ -167,10 +177,10 @@ class NettyTransportTest {
         exchangeHandler.delegate = message -> mismatchedResp;
         var ex = assertThrows(
                 MismatchedResponseTypeException.class,
-                () -> transport.exchange(address, exchangeEndpoint, message, Message.class, TransportUtils.defaultOptions())
+                () -> transport.exchange(address, exchangeEndpoint, message, TestMessage.class, TransportUtils.defaultOptions())
         );
         assertEquals(objectMapper.writeValueAsString(mismatchedResp), ex.response());
-        assertEquals(Message.class, ex.responseType());
+        assertEquals(TestMessage.class, ex.responseType());
         assertEquals(message, exchangeHandler.receivedMessage);
     }
 
@@ -180,12 +190,15 @@ class NettyTransportTest {
         try(var sock = new Socket()) {
             sock.connect(new InetSocketAddress(addrUri.getHost(), addrUri.getPort()), 1000);
             var out = sock.getOutputStream();
-            out.write(objectMapper.writeValueAsBytes(new com.github.arobie1992.clarinet.transport.Message(exchangeEndpoint, message)));
+            out.write(objectMapper.writeValueAsBytes(new Message(exchangeEndpoint, PeerUtils.senderId(), List.of(address), message)));
             sock.setSoTimeout(1000);
             var bytes = sock.getInputStream().readAllBytes();
-            assertEquals(response, objectMapper.readValue(bytes, Message.class));
-            var expectedAddress = new UriAddress(new URI("tcp://" + sock.getLocalAddress().getHostName() + ":" + sock.getLocalPort()));
-            assertEquals(expectedAddress, exchangeHandler.remoteAddress);
+            assertEquals(response, objectMapper.readValue(bytes, TestMessage.class));
+            var expected = new RemoteInformation(
+                    new Peer(PeerUtils.senderId(), Set.of(address)),
+                    new UriAddress(new URI("tcp://" + sock.getLocalAddress().getHostName() + ":" + sock.getLocalPort()))
+            );
+            assertEquals(expected, exchangeHandler.remoteInformation);
         }
     }
 
@@ -195,11 +208,14 @@ class NettyTransportTest {
         try(var sock = new Socket()) {
             sock.connect(new InetSocketAddress(addrUri.getHost(), addrUri.getPort()), 1000);
             var out = sock.getOutputStream();
-            out.write(objectMapper.writeValueAsBytes(new com.github.arobie1992.clarinet.transport.Message(sendEndpoint, message)));
-            var expectedAddress = new UriAddress(new URI("tcp://" + sock.getLocalAddress().getHostName() + ":" + sock.getLocalPort()));
+            out.write(objectMapper.writeValueAsBytes(new Message(sendEndpoint, PeerUtils.senderId(), List.of(address), message)));
+            var expected = new RemoteInformation(
+                    new Peer(PeerUtils.senderId(), Set.of(address)),
+                    new UriAddress(new URI("tcp://" + sock.getLocalAddress().getHostName() + ":" + sock.getLocalPort()))
+            );
             // need to wait for the send to complete so that the cleanup doesn't remove the handlers before the dispatcher starts
-            sendLatch.await();
-            assertEquals(expectedAddress, sendHandler.remoteAddress);
+            assertTrue(sendLatch.await(1, TimeUnit.SECONDS));
+            assertEquals(expected, sendHandler.remoteInformation);
         }
     }
 
@@ -226,7 +242,7 @@ class NettyTransportTest {
         var start = LocalDateTime.now();
         assertThrows(
                 UncheckedIOException.class,
-                () -> transport.exchange(address, exchangeEndpoint, message, Message.class, TransportUtils.defaultOptions())
+                () -> transport.exchange(address, exchangeEndpoint, message, TestMessage.class, TransportUtils.defaultOptions())
         );
         var duration = Duration.between(start, LocalDateTime.now());
         assertTrue(Duration.ofSeconds(9).compareTo(duration) < 0);
@@ -242,7 +258,7 @@ class NettyTransportTest {
         };
         var start = LocalDateTime.now();
         var options = new TransportOptions(Optional.empty(), Optional.of(Duration.ofSeconds(5)));
-        assertThrows(UncheckedIOException.class, () -> transport.exchange(address, exchangeEndpoint, message, Message.class, options));
+        assertThrows(UncheckedIOException.class, () -> transport.exchange(address, exchangeEndpoint, message, TestMessage.class, options));
         var duration = Duration.between(start, LocalDateTime.now());
         assertTrue(Duration.ofSeconds(4).compareTo(duration) < 0);
         assertTrue(Duration.ofSeconds(6).compareTo(duration) > 0);
@@ -257,7 +273,7 @@ class NettyTransportTest {
         };
         var ex = assertThrows(
                 ExchangeErrorException.class,
-                () -> transport.exchange(address, exchangeEndpoint, message, Message.class, TransportUtils.defaultOptions())
+                () -> transport.exchange(address, exchangeEndpoint, message, TestMessage.class, TransportUtils.defaultOptions())
         );
         assertEquals(exMessage, ex.error());
     }
@@ -266,7 +282,7 @@ class NettyTransportTest {
     void testExchangeNoEndpoint() {
         var ex = assertThrows(
                 ExchangeErrorException.class,
-                () -> transport.exchange(address, "notThere", message, Message.class, TransportUtils.defaultOptions())
+                () -> transport.exchange(address, "notThere", message, TestMessage.class, TransportUtils.defaultOptions())
         );
         assertEquals("No such endpoint: notThere", ex.error());
     }
@@ -278,7 +294,7 @@ class NettyTransportTest {
         };
         var ex = assertThrows(
                 ExchangeErrorException.class,
-                () -> transport.exchange(address, exchangeEndpoint, message, Message.class, TransportUtils.defaultOptions())
+                () -> transport.exchange(address, exchangeEndpoint, message, TestMessage.class, TransportUtils.defaultOptions())
         );
         assertEquals("Unspecified error", ex.error());
     }
@@ -298,7 +314,7 @@ class NettyTransportTest {
     @Test
     void testHandlerReceiveTimeout() throws IOException, URISyntaxException {
         var options = new TransportOptions(Optional.empty(), Optional.of(Duration.ofSeconds(5)));
-        try(var transport = new NettyTransport(options)) {
+        try(var transport = new NettyTransport(PeerUtils.senderId(), options)) {
             var address = transport.add(new UriAddress(new URI("tcp://localhost:0")));
             exchangeHandler.delegate = ignoredMessage -> response;
             transport.add(exchangeEndpoint, exchangeHandler);

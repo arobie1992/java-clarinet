@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.github.arobie1992.clarinet.adt.None;
+import com.github.arobie1992.clarinet.adt.Some;
 import com.github.arobie1992.clarinet.core.*;
 import com.github.arobie1992.clarinet.crypto.PublicKey;
 import com.github.arobie1992.clarinet.impl.crypto.Keys;
@@ -18,7 +19,6 @@ import com.github.arobie1992.clarinet.impl.netty.PeerIdSerializer;
 import com.github.arobie1992.clarinet.impl.peer.UriAddress;
 import com.github.arobie1992.clarinet.message.DataMessage;
 import com.github.arobie1992.clarinet.message.MessageId;
-import com.github.arobie1992.clarinet.peer.Address;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.reputation.TrustFilters;
@@ -26,14 +26,18 @@ import com.github.arobie1992.clarinet.testutils.PeerUtils;
 import com.github.arobie1992.clarinet.testutils.TestConnection;
 import com.github.arobie1992.clarinet.testutils.TestReputation;
 import com.github.arobie1992.clarinet.testutils.TransportUtils;
+import com.github.arobie1992.clarinet.transport.ExchangeHandler;
+import com.github.arobie1992.clarinet.transport.RemoteInformation;
 import com.github.arobie1992.clarinet.transport.SendHandler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -59,17 +63,18 @@ class IntegrationTest {
     void setUp() throws URISyntaxException, NoSuchAlgorithmException {
         sender = Nodes.newBuilder().id(PeerUtils.senderId())
                 .peerStore(new InMemoryPeerStore())
-                .transport(() -> new NettyTransport(TransportUtils.defaultOptions()))
+                .transport(() -> new NettyTransport(PeerUtils.senderId(), TransportUtils.defaultOptions()))
                 .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
                 .reputationStore(new InMemoryReputationStore(TestReputation::new))
                 .messageStore(new InMemoryMessageStore())
                 .keyStore(new InMemoryKeyStore())
                 .build();
+        sender.transport().add(new UriAddress(new URI("tcp://localhost:0")));
         sender.keyStore().addKeyPair(sender.id(), Keys.generateKeyPair());
 
         witness = Nodes.newBuilder().id(PeerUtils.witnessId())
                 .peerStore(new InMemoryPeerStore())
-                .transport(() -> new NettyTransport(TransportUtils.defaultOptions()))
+                .transport(() -> new NettyTransport(PeerUtils.witnessId(), TransportUtils.defaultOptions()))
                 .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
                 .reputationStore(new InMemoryReputationStore(TestReputation::new))
                 .messageStore(new InMemoryMessageStore())
@@ -80,7 +85,7 @@ class IntegrationTest {
 
         receiver = Nodes.newBuilder().id(PeerUtils.receiverId())
                 .peerStore(new InMemoryPeerStore())
-                .transport(() -> new NettyTransport(TransportUtils.defaultOptions()))
+                .transport(() -> new NettyTransport(PeerUtils.receiverId(), TransportUtils.defaultOptions()))
                 .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
                 .reputationStore(new InMemoryReputationStore(TestReputation::new))
                 .messageStore(new InMemoryMessageStore())
@@ -96,7 +101,7 @@ class IntegrationTest {
         sender.peerStore().save(asPeer(witness));
         receiver.addWitnessNotificationHandler(new SendHandler<>() {
             @Override
-            public None<Void> handle(Address remoteAddress, WitnessNotification message) {
+            public None<Void> handle(RemoteInformation remoteInformation, WitnessNotification message) {
                 sendLatch.countDown();
                 return null;
             }
@@ -104,6 +109,35 @@ class IntegrationTest {
             @Override
             public Class<WitnessNotification> inputType() {
                 return WitnessNotification.class;
+            }
+        });
+
+        witness.addWitnessHandler(new ExchangeHandler<>() {
+
+            @Override
+            public Some<WitnessResponse> handle(RemoteInformation remoteInformation, WitnessRequest message) {
+                var neededPeers = new ArrayList<PeerId>();
+                if(needsAddress(message.sender())) {
+                    neededPeers.add(sender.id());
+                }
+                if(needsAddress(message.receiver())) {
+                    neededPeers.add(receiver.id());
+                }
+                var request = new PeersRequest(neededPeers.size(), neededPeers);
+                var response = witness.requestPeers(remoteInformation.peer().id(), request, TransportUtils.defaultOptions());
+                response.peers().forEach(witness.peerStore()::save);
+                var rejected = needsAddress(message.receiver());
+                var reason = rejected ? "No address for receiver" : null;
+                return new Some<>(new WitnessResponse(rejected, reason));
+            }
+
+            private boolean needsAddress(PeerId peerId) {
+                return witness.peerStore().find(peerId).map(p -> p.addresses().isEmpty()).orElse(true);
+            }
+
+            @Override
+            public Class<WitnessRequest> inputType() {
+                return WitnessRequest.class;
             }
         });
 
@@ -132,76 +166,91 @@ class IntegrationTest {
         // receiver querying message
     }
 
+    @Disabled
     @Test
     void testMaliciousSender() {
         fail("implement");
     }
 
+    @Disabled
     @Test
     void testMaliciousWitness() {
         fail("implement");
     }
 
+    @Disabled
     @Test
     void testMaliciousReceiver() {
         fail("implement");
     }
 
+    @Disabled
     @Test
     void testMaliciousSenderAndWitness() {
         fail("implement");
     }
 
+    @Disabled
     @Test
     void testMaliciousSenderAndReceiver() {
         fail("implement");
     }
 
+    @Disabled
     @Test
     void testMaliciousWitnessAndReceiver() {
         fail("implement");
     }
 
+    @Disabled
     @Test
     void testConnectFailsToReachReceiver() {
         fail("implement");
     }
 
+    @Disabled
     @Test
     void testConnectFailsToReachSender() {
         fail("implement");
     }
 
+    @Disabled
     @Test
     void testConnectNoTrustedWitnessesWitness() {
         fail("implement");
     }
 
+    @Disabled
     @Test
     void testConnectFailsToNotifyOfWitness() {
         fail("implement");
     }
 
+    @Disabled
     @Test
     void testWitnessDropsMessage() {
         fail("implement");
     }
 
+    @Disabled
     @Test
     void testReceiverDropsMessage() {
         fail("implement");
     }
 
+    @Disabled
     @Test
     void testCloseFailsAtReceiver() {
         fail("implement");
     }
 
+    @Disabled
     @Test
     void testCloseFailsAtWitness() {
         fail("implement");
     }
 
+    @Disabled
     @Test
     void testCloseFailsAtSender() {
         fail("implement");

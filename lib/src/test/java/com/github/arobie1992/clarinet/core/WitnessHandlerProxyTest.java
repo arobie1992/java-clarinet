@@ -1,11 +1,18 @@
 package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.adt.Some;
+import com.github.arobie1992.clarinet.peer.Peer;
+import com.github.arobie1992.clarinet.peer.PeerStore;
 import com.github.arobie1992.clarinet.testutils.AddressUtils;
 import com.github.arobie1992.clarinet.testutils.PeerUtils;
 import com.github.arobie1992.clarinet.transport.ExchangeHandler;
+import com.github.arobie1992.clarinet.transport.RemoteInformation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -13,12 +20,18 @@ import static org.mockito.Mockito.*;
 
 class WitnessHandlerProxyTest {
 
+    private final RemoteInformation remoteInformation = new RemoteInformation(
+            new Peer(PeerUtils.senderId(), new HashSet<>(Set.of(AddressUtils.defaultAddress()))),
+            AddressUtils.defaultAddress()
+    );
     private final WitnessRequest witnessRequest = new WitnessRequest(ConnectionId.random(), PeerUtils.senderId(), PeerUtils.receiverId());
 
     private ExchangeHandler<WitnessRequest, WitnessResponse> handler;
     private ConnectionStore connectionStore;
     private Node node;
     private WitnessHandlerProxy handlerProxy;
+    private PeerStore peerStore;
+    private ConnectionImpl connection;
 
     @BeforeEach
     public void setUp() {
@@ -26,19 +39,21 @@ class WitnessHandlerProxyTest {
         handler = (ExchangeHandler<WitnessRequest, WitnessResponse>) mock(ExchangeHandler.class);
         connectionStore = mock(ConnectionStore.class);
         node = mock(Node.class);
-        handlerProxy = new WitnessHandlerProxy(handler, connectionStore, node);
+        handlerProxy = new WitnessHandlerProxy(null, connectionStore, node);
+        peerStore = mock(PeerStore.class);
+        when(node.peerStore()).thenReturn(peerStore);
+        when(peerStore.find(remoteInformation.peer().id())).thenReturn(Optional.empty());
+        connection = new ConnectionImpl(witnessRequest.connectionId(), witnessRequest.sender(), witnessRequest.receiver(), Connection.Status.OPEN);
+        connection.lock.writeLock().lock();
+        when(connectionStore.findForWrite(witnessRequest.connectionId())).thenReturn(new Writeable(connection));
     }
 
 
     @Test
     void testNullHandler() {
-        handlerProxy = assertDoesNotThrow(() -> new WitnessHandlerProxy(null, connectionStore, node));
         var expected = new Some<>(new WitnessResponse(false, null));
         when(node.id()).thenReturn(PeerUtils.witnessId());
-        var conn = new ConnectionImpl(witnessRequest.connectionId(), witnessRequest.sender(), witnessRequest.receiver(), Connection.Status.OPEN);
-        conn.lock.writeLock().lock();
-        when(connectionStore.findForWrite(witnessRequest.connectionId())).thenReturn(new Writeable(conn));
-        var actual = handlerProxy.handle(AddressUtils.defaultAddress(), witnessRequest);
+        var actual = handlerProxy.handle(remoteInformation, witnessRequest);
         assertEquals(expected, actual);
         verify(connectionStore).accept(
                 witnessRequest.connectionId(),
@@ -46,7 +61,8 @@ class WitnessHandlerProxyTest {
                 PeerUtils.receiverId(),
                 Connection.Status.OPEN
         );
-        assertEquals(PeerUtils.witnessId(), conn.witness().orElseThrow());
+        assertEquals(PeerUtils.witnessId(), connection.witness().orElseThrow());
+        verify(peerStore).save(remoteInformation.peer());
     }
 
     @Test
@@ -61,18 +77,19 @@ class WitnessHandlerProxyTest {
 
     @Test
     void testUserHandlerRejects() {
+        handlerProxy = new WitnessHandlerProxy(handler, connectionStore, node);
         var expected = new Some<>(new WitnessResponse(true, "test reject"));
-        when(handler.handle(AddressUtils.defaultAddress(), witnessRequest)).thenReturn(expected);
-        assertEquals(expected, handlerProxy.handle(AddressUtils.defaultAddress(), witnessRequest));
+        when(handler.handle(remoteInformation, witnessRequest)).thenReturn(expected);
+        assertEquals(expected, handlerProxy.handle(remoteInformation, witnessRequest));
         verify(connectionStore, never()).accept(any(), any(), any(), any());
+        verify(peerStore).save(remoteInformation.peer());
     }
 
     @Test
     void handleFailsToFindConnection() {
-        handlerProxy = assertDoesNotThrow(() -> new WitnessHandlerProxy(null, connectionStore, node));
         when(node.id()).thenReturn(PeerUtils.witnessId());
         when(connectionStore.findForWrite(witnessRequest.connectionId())).thenReturn(new Connection.Absent());
-        var ex = assertThrows(IllegalStateException.class, () -> handlerProxy.handle(AddressUtils.defaultAddress(), witnessRequest));
+        var ex = assertThrows(IllegalStateException.class, () -> handlerProxy.handle(remoteInformation, witnessRequest));
         assertEquals("Failed to accept connection", ex.getMessage());
         verify(connectionStore).accept(
                 witnessRequest.connectionId(),
@@ -80,12 +97,28 @@ class WitnessHandlerProxyTest {
                 PeerUtils.receiverId(),
                 Connection.Status.OPEN
         );
+        verify(peerStore).save(remoteInformation.peer());
     }
 
     @Test
     void testDefaultHandlerInputType() {
-        handlerProxy = assertDoesNotThrow(() -> new WitnessHandlerProxy(null, connectionStore, node));
         assertEquals(WitnessRequest.class, handlerProxy.inputType());
+    }
+
+    @Test
+    void testStoredPeerUpdated() {
+        var storedPeer = new Peer(remoteInformation.peer().id());
+        when(peerStore.find(remoteInformation.peer().id())).thenReturn(Optional.of(storedPeer));
+        handlerProxy.handle(remoteInformation, witnessRequest);
+        assertEquals(remoteInformation.peer().addresses(), storedPeer.addresses());
+        verify(peerStore).save(storedPeer);
+    }
+
+    @Test
+    void testUserHandlerReturnsNull() {
+        handlerProxy = assertDoesNotThrow(() -> new WitnessHandlerProxy(handler, connectionStore, node));
+        var ex = assertThrows(NullPointerException.class, () -> handlerProxy.handle(remoteInformation, witnessRequest));
+        assertEquals("User handler returned a null WitnessResponse", ex.getMessage());
     }
 
 }

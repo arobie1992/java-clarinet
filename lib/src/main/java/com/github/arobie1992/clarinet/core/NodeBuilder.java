@@ -67,7 +67,15 @@ public interface NodeBuilder {
 
     NodeBuilder keyStore(KeyStore keyStore);
 
-    NodeBuilder messageHandler(SendHandler<DataMessage> messageSendHandler);
+    /**
+     * User-defined behavior for messages. This handler is called both when a node serves as the receiver and as the
+     * witness in a connection.
+     * <p>
+     * Users do not need to update the connection themselves.
+     * @param messageHandler The handler implementing the user-desired behavior.
+     * @return {@code this} builder for fluent building.
+     */
+    NodeBuilder messageHandler(SendHandler<DataMessage> messageHandler);
 
     Node build();
 }

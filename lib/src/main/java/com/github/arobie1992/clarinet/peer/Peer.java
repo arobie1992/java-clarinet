@@ -3,12 +3,9 @@ package com.github.arobie1992.clarinet.peer;
 import java.util.HashSet;
 import java.util.Set;
 
-public final class Peer {
-    private final PeerId id;
-    private final Set<Address> addresses = new HashSet<>();
-
-    public Peer(PeerId id) {
-        this.id = id;
+public record Peer(PeerId id, Set<Address> addresses) {
+    public Peer(PeerId peerId) {
+        this(peerId, new HashSet<>());
     }
 
     /**

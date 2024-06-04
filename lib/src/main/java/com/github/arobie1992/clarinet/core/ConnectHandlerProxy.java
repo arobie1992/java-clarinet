@@ -1,8 +1,8 @@
 package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.adt.Some;
-import com.github.arobie1992.clarinet.peer.Address;
 import com.github.arobie1992.clarinet.transport.ExchangeHandler;
+import com.github.arobie1992.clarinet.transport.RemoteInformation;
 
 import java.util.Objects;
 
@@ -18,8 +18,12 @@ class ConnectHandlerProxy implements ExchangeHandler<ConnectRequest, ConnectResp
     }
 
     @Override
-    public Some<ConnectResponse> handle(Address remoteAddress, ConnectRequest message) {
-        var resp = Objects.requireNonNull(userHandler.handle(remoteAddress, message), "User handler returned a null ConnectResponse");
+    public Some<ConnectResponse> handle(RemoteInformation remoteInformation, ConnectRequest message) {
+        var peer = node.peerStore().find(remoteInformation.peer().id()).orElse(remoteInformation.peer());
+        peer.addresses().addAll(remoteInformation.peer().addresses());
+        node.peerStore().save(peer);
+
+        var resp = Objects.requireNonNull(userHandler.handle(remoteInformation, message), "User handler returned a null ConnectResponse");
         if(!resp.value().rejected()) {
             connectionStore.accept(message.connectionId(), message.sender(), node.id(), Connection.Status.AWAITING_WITNESS);
         }
@@ -34,7 +38,7 @@ class ConnectHandlerProxy implements ExchangeHandler<ConnectRequest, ConnectResp
 
     private static final ExchangeHandler<ConnectRequest, ConnectResponse> DEFAULT_HANDLER = new ExchangeHandler<>() {
         @Override
-        public Some<ConnectResponse> handle(Address address, ConnectRequest message) {
+        public Some<ConnectResponse> handle(RemoteInformation remoteInformation, ConnectRequest message) {
             return new Some<>(new ConnectResponse(false, null));
         }
 

@@ -1,7 +1,7 @@
 package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.adt.None;
-import com.github.arobie1992.clarinet.peer.Address;
+import com.github.arobie1992.clarinet.transport.RemoteInformation;
 import com.github.arobie1992.clarinet.transport.SendHandler;
 
 import java.util.Objects;
@@ -9,15 +9,21 @@ import java.util.Objects;
 class WitnessNotificationHandlerProxy implements SendHandler<WitnessNotification> {
     private final SendHandler<WitnessNotification> userHandler;
     private final ConnectionStore connectionStore;
+    private final Node node;
 
-    WitnessNotificationHandlerProxy(SendHandler<WitnessNotification> userHandler, ConnectionStore connectionStore) {
+    WitnessNotificationHandlerProxy(SendHandler<WitnessNotification> userHandler, ConnectionStore connectionStore, Node node) {
         this.userHandler = userHandler == null ? DEFAULT_HANDLER : userHandler;
         this.connectionStore = Objects.requireNonNull(connectionStore);
+        this.node = Objects.requireNonNull(node);
     }
 
     @Override
-    public None<Void> handle(Address remoteAddress, WitnessNotification message) {
-        userHandler.handle(remoteAddress, message);
+    public None<Void> handle(RemoteInformation remoteInformation, WitnessNotification message) {
+        var peer = node.peerStore().find(remoteInformation.peer().id()).orElse(remoteInformation.peer());
+        peer.addresses().addAll(remoteInformation.peer().addresses());
+        node.peerStore().save(peer);
+
+        userHandler.handle(remoteInformation, message);
         try(var ref = connectionStore.findForWrite(message.connectionId())) {
             switch (ref) {
                 case Writeable(ConnectionImpl conn) -> {
@@ -41,7 +47,7 @@ class WitnessNotificationHandlerProxy implements SendHandler<WitnessNotification
     private static final SendHandler<WitnessNotification> DEFAULT_HANDLER = new SendHandler<>() {
 
         @Override
-        public None<Void> handle(Address remoteAddress, WitnessNotification message) {
+        public None<Void> handle(RemoteInformation remoteInformation, WitnessNotification message) {
             return null;
         }
 

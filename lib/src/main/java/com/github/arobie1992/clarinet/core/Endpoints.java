@@ -4,7 +4,8 @@ public enum Endpoints {
     CONNECT,
     WITNESS,
     WITNESS_NOTIFICATION,
-    MESSAGE;
+    MESSAGE,
+    REQUEST_PEERS;
 
     static boolean isEndpoint(String endpoint) {
         for (Endpoints e : Endpoints.values()) {

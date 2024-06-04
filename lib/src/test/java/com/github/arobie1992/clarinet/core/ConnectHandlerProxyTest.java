@@ -1,23 +1,35 @@
 package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.adt.Some;
+import com.github.arobie1992.clarinet.peer.Peer;
+import com.github.arobie1992.clarinet.peer.PeerStore;
 import com.github.arobie1992.clarinet.testutils.AddressUtils;
 import com.github.arobie1992.clarinet.testutils.PeerUtils;
 import com.github.arobie1992.clarinet.transport.ExchangeHandler;
+import com.github.arobie1992.clarinet.transport.RemoteInformation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ConnectHandlerProxyTest {
 
+    private final RemoteInformation remoteInformation = new RemoteInformation(
+            new Peer(PeerUtils.senderId(), new HashSet<>(Set.of(AddressUtils.defaultAddress()))),
+            AddressUtils.defaultAddress()
+    );
     private final ConnectRequest connectRequest = new ConnectRequest(ConnectionId.random(), PeerUtils.senderId());
 
     private ExchangeHandler<ConnectRequest, ConnectResponse> handler;
     private ConnectionStore connectionStore;
     private Node node;
     private ConnectHandlerProxy connectHandlerProxy;
+    private PeerStore peerStore;
 
     @BeforeEach
     public void setUp() {
@@ -25,15 +37,17 @@ class ConnectHandlerProxyTest {
         handler = (ExchangeHandler<ConnectRequest, ConnectResponse>) mock(ExchangeHandler.class);
         connectionStore = mock(ConnectionStore.class);
         node = mock(Node.class);
-        connectHandlerProxy = new ConnectHandlerProxy(handler, connectionStore, node);
+        connectHandlerProxy = new ConnectHandlerProxy(null, connectionStore, node);
+        peerStore = mock(PeerStore.class);
+        when(node.peerStore()).thenReturn(peerStore);
+        when(peerStore.find(remoteInformation.peer().id())).thenReturn(Optional.empty());
     }
 
     @Test
     void testNullHandler() {
-        connectHandlerProxy = assertDoesNotThrow(() -> new ConnectHandlerProxy(null, connectionStore, node));
         var expected = new Some<>(new ConnectResponse(false, null));
         when(node.id()).thenReturn(PeerUtils.receiverId());
-        var actual = connectHandlerProxy.handle(AddressUtils.defaultAddress(), connectRequest);
+        var actual = connectHandlerProxy.handle(remoteInformation, connectRequest);
         assertEquals(expected, actual);
         verify(connectionStore).accept(
                 connectRequest.connectionId(),
@@ -41,6 +55,7 @@ class ConnectHandlerProxyTest {
                 PeerUtils.receiverId(),
                 Connection.Status.AWAITING_WITNESS
         );
+        verify(peerStore).save(remoteInformation.peer());
     }
 
     @Test
@@ -55,16 +70,34 @@ class ConnectHandlerProxyTest {
 
     @Test
     void testUserHandlerRejects() {
+        connectHandlerProxy = new ConnectHandlerProxy(handler, connectionStore, node);
         var expected = new Some<>(new ConnectResponse(true, "test reject"));
-        when(handler.handle(AddressUtils.defaultAddress(), connectRequest)).thenReturn(expected);
-        assertEquals(expected, connectHandlerProxy.handle(AddressUtils.defaultAddress(), connectRequest));
+        when(handler.handle(remoteInformation, connectRequest)).thenReturn(expected);
+        assertEquals(expected, connectHandlerProxy.handle(remoteInformation, connectRequest));
         verify(connectionStore, never()).accept(any(), any(), any(), any());
+        verify(peerStore).save(remoteInformation.peer());
     }
 
     @Test
     void testDefaultHandlerInputType() {
-        connectHandlerProxy = assertDoesNotThrow(() -> new ConnectHandlerProxy(null, connectionStore, node));
         assertEquals(ConnectRequest.class, connectHandlerProxy.inputType());
+    }
+
+    @Test
+    void testUpdatesStoredPeer() {
+        var storedPeer = new Peer(remoteInformation.peer().id());
+        when(peerStore.find(remoteInformation.peer().id())).thenReturn(Optional.of(storedPeer));
+        connectHandlerProxy.handle(remoteInformation, connectRequest);
+        assertEquals(remoteInformation.peer().addresses(), storedPeer.addresses());
+        verify(peerStore).save(storedPeer);
+    }
+
+    @Test
+    void testUserHandlerReturnsNull() {
+        // the mock returns null by default so we don't need to do any additional setup
+        connectHandlerProxy = assertDoesNotThrow(() -> new ConnectHandlerProxy(handler, connectionStore, node));
+        var ex = assertThrows(NullPointerException.class, () -> connectHandlerProxy.handle(remoteInformation, connectRequest));
+        assertEquals("User handler returned a null ConnectResponse", ex.getMessage());
     }
 
 }

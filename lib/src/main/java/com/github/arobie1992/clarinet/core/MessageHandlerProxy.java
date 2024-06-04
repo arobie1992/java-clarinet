@@ -2,7 +2,7 @@ package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.adt.None;
 import com.github.arobie1992.clarinet.message.DataMessage;
-import com.github.arobie1992.clarinet.peer.Address;
+import com.github.arobie1992.clarinet.transport.RemoteInformation;
 import com.github.arobie1992.clarinet.transport.SendHandler;
 import com.github.arobie1992.clarinet.transport.TransportOptions;
 
@@ -24,7 +24,11 @@ class MessageHandlerProxy implements SendHandler<DataMessage> {
     }
 
     @Override
-    public None<Void> handle(Address remoteAddress, DataMessage message) {
+    public None<Void> handle(RemoteInformation remoteInformation, DataMessage message) {
+        var peer = node.peerStore().find(remoteInformation.peer().id()).orElse(remoteInformation.peer());
+        peer.addresses().addAll(remoteInformation.peer().addresses());
+        node.peerStore().save(peer);
+
         var connectionId = message.messageId().connectionId();
         try(var ref = connectionStore.findForWrite(connectionId)) {
             if(!(ref instanceof Writeable(ConnectionImpl connection))) {
@@ -39,7 +43,7 @@ class MessageHandlerProxy implements SendHandler<DataMessage> {
                 throw new IllegalArgumentException("Connection is not through or to " + node.id());
             }
             node.messageStore().add(message);
-            userHandler.handle(remoteAddress, message);
+            userHandler.handle(remoteInformation, message);
 
             if(witness.equals(node.id())) {
                 message.setWitnessSignature(node.genSignature(message.witnessParts()));
@@ -58,7 +62,7 @@ class MessageHandlerProxy implements SendHandler<DataMessage> {
 
     private static final SendHandler<DataMessage> DEFAULT_HANDLER = new SendHandler<>() {
         @Override
-        public None<Void> handle(Address remoteAddress, DataMessage message) {
+        public None<Void> handle(RemoteInformation remoteInformation, DataMessage message) {
             return THE_NONE;
         }
 

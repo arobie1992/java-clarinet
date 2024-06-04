@@ -1,9 +1,11 @@
 package com.github.arobie1992.clarinet.core;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@Disabled
 class SimpleNodeTest {
 
     @Test

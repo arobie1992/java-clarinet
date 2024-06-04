@@ -5,7 +5,10 @@ import com.github.arobie1992.clarinet.message.MessageId;
 import com.github.arobie1992.clarinet.message.MessageStore;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
-import com.github.arobie1992.clarinet.transport.*;
+import com.github.arobie1992.clarinet.transport.ExchangeHandler;
+import com.github.arobie1992.clarinet.transport.SendHandler;
+import com.github.arobie1992.clarinet.transport.Transport;
+import com.github.arobie1992.clarinet.transport.TransportOptions;
 
 public interface Node {
     PeerId id();
@@ -36,6 +39,8 @@ public interface Node {
     ConnectionId connect(PeerId receiver, ConnectionOptions connectionOptions, TransportOptions transportOptions);
 
     MessageId send(ConnectionId connectionId, byte[] data, TransportOptions transportOptions);
+
+    PeersResponse requestPeers(PeerId requestee, PeersRequest request, TransportOptions transportOptions);
 
     void addConnectHandler(ExchangeHandler<ConnectRequest, ConnectResponse> connectHandler);
 

@@ -10,10 +10,12 @@ import com.github.arobie1992.clarinet.adt.Some;
 import com.github.arobie1992.clarinet.core.ConnectionId;
 import com.github.arobie1992.clarinet.impl.peer.UriAddress;
 import com.github.arobie1992.clarinet.message.DataMessage;
+import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.transport.ErrorResponse;
 import com.github.arobie1992.clarinet.transport.Handler;
 import com.github.arobie1992.clarinet.transport.Message;
+import com.github.arobie1992.clarinet.transport.RemoteInformation;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.timeout.ReadTimeoutException;
@@ -58,7 +60,13 @@ class HandlerDispatcher extends ChannelInboundHandlerAdapter {
         // This is a pretty awful approach, but it should work for now.
         Object contents = objectMapper.readValue(objectMapper.writeValueAsString(message.contents()), handler.inputType());
         var remoteAddr = (InetSocketAddress) ctx.channel().remoteAddress();
-        var resp = handler.handle(new UriAddress(new URI("tcp://" + remoteAddr.getHostName() + ":" + remoteAddr.getPort())), contents);
+        var remotePeer = new Peer(message.sender());
+        remotePeer.addresses().addAll(message.contactAt());
+        var remoteInformation = new RemoteInformation(
+                remotePeer,
+                new UriAddress(new URI("tcp://" + remoteAddr.getHostName() + ":" + remoteAddr.getPort()))
+        );
+        var resp = handler.handle(remoteInformation, contents);
         if(resp instanceof Some<Object>(Object data)) {
             writeResponse(ctx, data);
         }

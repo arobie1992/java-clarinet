@@ -44,8 +44,10 @@ public class NettyTransport implements Transport, AutoCloseable {
     private final EventLoopGroup workerGroup = new NioEventLoopGroup();
     private final ServerBootstrap serverBootstrap;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final PeerId nodeId;
 
-    public NettyTransport(TransportOptions transportOptions) {
+    public NettyTransport(PeerId nodeId, TransportOptions transportOptions) {
+        this.nodeId = nodeId;
         var handlerReceiveTimeout = timeoutMillis(transportOptions.receiveTimeout());
         serverBootstrap = new ServerBootstrap().group(bossGroup, workerGroup)
                 .channel(NioServerSocketChannel.class)
@@ -67,6 +69,7 @@ public class NettyTransport implements Transport, AutoCloseable {
         module.addSerializer(PeerId.class, new PeerIdSerializer());
         module.addSerializer(ConnectionId.class, new ConnectionIdSerializer());
         module.addSerializer(DataMessage.class, new DataMessageSerializer());
+        module.addSerializer(Address.class, new AddressSerializer());
         objectMapper.registerModule(module);
         objectMapper.registerModule(new Jdk8Module());
         objectMapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
@@ -160,7 +163,7 @@ public class NettyTransport implements Transport, AutoCloseable {
         try(var sock = new Socket()) {
             sock.connect(new InetSocketAddress(addrUri.getHost(), addrUri.getPort()), timeoutMillis(options.sendTimeout()));
             var out = sock.getOutputStream();
-            out.write(objectMapper.writeValueAsBytes(new Message(endpoint, message)));
+            out.write(objectMapper.writeValueAsBytes(new Message(endpoint, nodeId, contactAt(), message)));
             sock.setSoTimeout(timeoutMillis(options.receiveTimeout()));
             var bytes = sock.getInputStream().readAllBytes();
             try {
@@ -184,10 +187,14 @@ public class NettyTransport implements Transport, AutoCloseable {
         try(var sock = new Socket()) {
             sock.connect(new InetSocketAddress(addrUri.getHost(), addrUri.getPort()), timeoutMillis(options.sendTimeout()));
             var out = sock.getOutputStream();
-            out.write(objectMapper.writeValueAsBytes(new Message(endpoint, message)));
+            out.write(objectMapper.writeValueAsBytes(new Message(endpoint, nodeId, contactAt(), message)));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    private List<Address> contactAt() {
+        return addresses().stream().findFirst().map(List::of).orElse(List.of());
     }
 
     @Override
