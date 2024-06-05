@@ -37,8 +37,8 @@ import org.junit.jupiter.api.Test;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 
@@ -49,7 +49,8 @@ class IntegrationTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private Node sender, witness, receiver;
-    private CountDownLatch sendLatch;
+    private CountDownLatch witnessNotificationLatch;
+    private CountDownLatch messageLatch;
 
     IntegrationTest() {
         var module = new SimpleModule();
@@ -92,7 +93,8 @@ class IntegrationTest {
                 .keyStore(new InMemoryKeyStore())
                 .build();
         receiver.transport().add(new UriAddress(new URI("tcp://localhost:0")));
-        sendLatch = new CountDownLatch(1);
+        witnessNotificationLatch = new CountDownLatch(1);
+        messageLatch = new CountDownLatch(1);
     }
 
     @Test
@@ -102,10 +104,9 @@ class IntegrationTest {
         receiver.addWitnessNotificationHandler(new SendHandler<>() {
             @Override
             public None<Void> handle(RemoteInformation remoteInformation, WitnessNotification message) {
-                sendLatch.countDown();
+                witnessNotificationLatch.countDown();
                 return null;
             }
-
             @Override
             public Class<WitnessNotification> inputType() {
                 return WitnessNotification.class;
@@ -113,31 +114,40 @@ class IntegrationTest {
         });
 
         witness.addWitnessHandler(new ExchangeHandler<>() {
-
             @Override
             public Some<WitnessResponse> handle(RemoteInformation remoteInformation, WitnessRequest message) {
-                var neededPeers = new ArrayList<PeerId>();
+                var neededPeers = new HashSet<PeerId>();
                 if(needsAddress(message.sender())) {
                     neededPeers.add(sender.id());
                 }
                 if(needsAddress(message.receiver())) {
                     neededPeers.add(receiver.id());
                 }
-                var request = new PeersRequest(neededPeers.size(), neededPeers);
-                var response = witness.requestPeers(remoteInformation.peer().id(), request, TransportUtils.defaultOptions());
-                response.peers().forEach(witness.peerStore()::save);
+                witness.requestPeers(remoteInformation.peer().id(), new PeersRequest(neededPeers), TransportUtils.defaultOptions())
+                        .peers()
+                        .forEach(witness.peerStore()::save);
                 var rejected = needsAddress(message.receiver());
                 var reason = rejected ? "No address for receiver" : null;
                 return new Some<>(new WitnessResponse(rejected, reason));
             }
-
             private boolean needsAddress(PeerId peerId) {
                 return witness.peerStore().find(peerId).map(p -> p.addresses().isEmpty()).orElse(true);
             }
-
             @Override
             public Class<WitnessRequest> inputType() {
                 return WitnessRequest.class;
+            }
+        });
+
+        receiver.addMessageHandler(new SendHandler<>() {
+            @Override
+            public None<Void> handle(RemoteInformation remoteInformation, DataMessage message) {
+                messageLatch.countDown();
+                return null;
+            }
+            @Override
+            public Class<DataMessage> inputType() {
+                return DataMessage.class;
             }
         });
 
@@ -145,7 +155,7 @@ class IntegrationTest {
         var connectionId = sender.connect(receiver.id(), new ConnectionOptions(), TransportUtils.defaultOptions());
         var expected = new TestConnection(connectionId, sender.id(), Optional.of(witness.id()), receiver.id(), Connection.Status.OPEN);
         // need latch to ensure test doesn't do verification before the witness notification handler has executed
-        sendLatch.await();
+        witnessNotificationLatch.await();
         verifyConnectionPresent(expected, sender);
         verifyConnectionPresent(expected, witness);
         verifyConnectionPresent(expected, receiver);
@@ -153,6 +163,8 @@ class IntegrationTest {
         // sending a message
         var data = new byte[]{0, 1, 2, 3, 4};
         var messageId = sender.send(connectionId, data, TransportUtils.defaultOptions());
+        // need latch to ensure test doesn't do verification before the receiver gets the message
+        messageLatch.await();
         verifyMessage(sender, messageId, 0, data, MessageVerificationMode.SENDER_ONLY);
         verifyMessage(witness, messageId, 0, data, MessageVerificationMode.SENDER_AND_WITNESS);
         verifyMessage(receiver, messageId, 0, data, MessageVerificationMode.SENDER_AND_WITNESS);
@@ -306,18 +318,18 @@ class IntegrationTest {
                 case SENDER_AND_WITNESS:
                     pubKeys = node.keyStore().findPublicKeys(connection.witness().orElseThrow());
                     encoded = objectMapper.writeValueAsBytes(message.witnessParts());
-                    verifyMessage(pubKeys, encoded, message);
+                    verifyMessage(pubKeys, encoded, message.witnessSignature().orElseThrow());
                 case SENDER_ONLY:
                     pubKeys = node.keyStore().findPublicKeys(connection.sender());
                     encoded = objectMapper.writeValueAsBytes(message.senderParts());
-                    verifyMessage(pubKeys, encoded, message);
+                    verifyMessage(pubKeys, encoded, message.senderSignature().orElseThrow());
                     break;
             }
         }
     }
 
-    private void verifyMessage(Collection<PublicKey> pubKeys, byte[] data, DataMessage message) {
+    private void verifyMessage(Collection<PublicKey> pubKeys, byte[] data, byte[] signature) {
         var key = pubKeys.iterator().next();
-        assertTrue(key.verify(data, message.senderSignature().orElseThrow()));
+        assertTrue(key.verify(data, signature));
     }
 }

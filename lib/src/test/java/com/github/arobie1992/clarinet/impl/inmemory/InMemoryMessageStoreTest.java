@@ -34,4 +34,29 @@ class InMemoryMessageStoreTest {
         assertEquals(message.messageId(), ex.messageId());
     }
 
+    @Test
+    void testModificationsAfterAddNotPersisted() {
+        assertTrue(message.witnessSignature().isEmpty());
+        store.add(message);
+        message.setWitnessSignature("test sig".getBytes());
+        var stored = store.find(message.messageId()).orElseThrow();
+        assertNotNull(message.witnessSignature());
+        assertTrue(stored.witnessSignature().isEmpty());
+    }
+
+    @Test
+    void testModifyingFoundNotPersisted() {
+        store.add(message);
+        var stored1 = store.find(message.messageId()).orElseThrow();
+        assertTrue(stored1.witnessSignature().isEmpty());
+        stored1.setWitnessSignature("test sig".getBytes());
+        var stored2 = store.find(message.messageId()).orElseThrow();
+        assertTrue(stored2.witnessSignature().isEmpty());
+    }
+
+    @Test
+    void testNotPresent() {
+        assertTrue(store.find(message.messageId()).isEmpty());
+    }
+
 }

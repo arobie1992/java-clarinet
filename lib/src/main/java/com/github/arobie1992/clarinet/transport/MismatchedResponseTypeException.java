@@ -4,8 +4,8 @@ public class MismatchedResponseTypeException extends RuntimeException {
     private final String response;
     private final Class<?> responseType;
 
-    public MismatchedResponseTypeException(String response, Class<?> responseType) {
-        super("Failed to parse response as type " + responseType);
+    public MismatchedResponseTypeException(String response, Class<?> responseType, Throwable cause) {
+        super("Failed to parse response as type " + responseType, cause);
         this.response = response;
         this.responseType = responseType;
     }

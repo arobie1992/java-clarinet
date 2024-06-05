@@ -10,6 +10,7 @@ import com.github.arobie1992.clarinet.adt.Some;
 import com.github.arobie1992.clarinet.core.ConnectionId;
 import com.github.arobie1992.clarinet.impl.peer.UriAddress;
 import com.github.arobie1992.clarinet.message.DataMessage;
+import com.github.arobie1992.clarinet.peer.Address;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.transport.ErrorResponse;
@@ -37,6 +38,8 @@ class HandlerDispatcher extends ChannelInboundHandlerAdapter {
     HandlerDispatcher(Map<String, Handler<Object, Object>> handlers) {
         this.handlers = handlers;
         var module = new SimpleModule();
+        module.addSerializer(PeerId.class, new PeerIdSerializer());
+        module.addSerializer(Address.class, new AddressSerializer());
         module.addDeserializer(PeerId.class, new PeerIdDeserializer());
         module.addDeserializer(ConnectionId.class, new ConnectionIdDeserializer());
         module.addDeserializer(DataMessage.class, new DataMessageDeserializer());

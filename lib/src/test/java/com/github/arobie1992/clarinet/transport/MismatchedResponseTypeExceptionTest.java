@@ -11,7 +11,8 @@ class MismatchedResponseTypeExceptionTest {
     private final String response = "This is a test response";
     @SuppressWarnings("rawtypes")
     private final Class<List> responseType = List.class;
-    private final MismatchedResponseTypeException exception = new MismatchedResponseTypeException(response, responseType);
+    private final Throwable cause = new RuntimeException("Test ex");
+    private final MismatchedResponseTypeException exception = new MismatchedResponseTypeException(response, responseType, cause);
 
     @Test
     void testMessage() {
@@ -26,5 +27,10 @@ class MismatchedResponseTypeExceptionTest {
     @Test
     void testResponseType() {
         assertEquals(responseType, exception.responseType());
+    }
+
+    @Test
+    void testCause() {
+        assertEquals(cause, exception.getCause());
     }
 }

@@ -77,5 +77,19 @@ public interface NodeBuilder {
      */
     NodeBuilder messageHandler(SendHandler<DataMessage> messageHandler);
 
+    /**
+     * User behavior for how to respond to a {@link PeersRequest}.
+     * <p>
+     * No provided handler means the system should construct the response to the best of its ability. By default, the
+     * node itself that received the {@code PeersRequest} will not include information on itself unless it is
+     * specifically included in {@link PeersRequest#requested()} as the assumption is that if the node is able to be
+     * contacted the requestor already had information on it.
+     * <p>
+     * Providing a handler means that the system will return the user-provided response exactly as is.
+     * @param peersRequestHandler The handler implementing the user-desired behavior.
+     * @return {@code this} builder for fluent building.
+     */
+    NodeBuilder peersRequestHandler(ExchangeHandler<PeersRequest, PeersResponse> peersRequestHandler);
+
     Node build();
 }

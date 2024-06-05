@@ -182,6 +182,7 @@ class NettyTransportTest {
         assertEquals(objectMapper.writeValueAsString(mismatchedResp), ex.response());
         assertEquals(TestMessage.class, ex.responseType());
         assertEquals(message, exchangeHandler.receivedMessage);
+        assertNotNull(ex.getCause());
     }
 
     @Test

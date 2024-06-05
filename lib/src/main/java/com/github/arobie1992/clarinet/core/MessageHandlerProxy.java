@@ -42,11 +42,14 @@ class MessageHandlerProxy implements SendHandler<DataMessage> {
             if(!connection.receiver().equals(node.id()) && !witness.equals(node.id())) {
                 throw new IllegalArgumentException("Connection is not through or to " + node.id());
             }
+            // have the witness sign the message prior to saving it
+            if(witness.equals(node.id())) {
+                message.setWitnessSignature(node.genSignature(message.witnessParts()));
+            }
             node.messageStore().add(message);
             userHandler.handle(remoteInformation, message);
 
             if(witness.equals(node.id())) {
-                message.setWitnessSignature(node.genSignature(message.witnessParts()));
                 // TODO add ability for user to set transport options for handler
                 var transportOptions = new TransportOptions(Optional.empty(), Optional.empty());
                 node.sendInternal(connection.receiver(), message, transportOptions);

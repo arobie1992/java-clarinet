@@ -56,4 +56,16 @@ public class DataMessage {
     public record SenderParts(MessageId messageId, byte[] data) {}
     public record WitnessParts(MessageId messageId, byte[] data, byte[] senderSignature) {}
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        DataMessage message = (DataMessage) o;
+        return Objects.equals(messageId, message.messageId) && Objects.deepEquals(data, message.data) && Objects.deepEquals(senderSignature, message.senderSignature) && Objects.deepEquals(witnessSignature, message.witnessSignature);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(messageId, Arrays.hashCode(data), Arrays.hashCode(senderSignature), Arrays.hashCode(witnessSignature));
+    }
 }

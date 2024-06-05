@@ -70,6 +70,8 @@ public class NettyTransport implements Transport, AutoCloseable {
         module.addSerializer(ConnectionId.class, new ConnectionIdSerializer());
         module.addSerializer(DataMessage.class, new DataMessageSerializer());
         module.addSerializer(Address.class, new AddressSerializer());
+        module.addDeserializer(PeerId.class, new PeerIdDeserializer());
+        module.addDeserializer(Address.class, new AddressDeserializer());
         objectMapper.registerModule(module);
         objectMapper.registerModule(new Jdk8Module());
         objectMapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
@@ -173,7 +175,7 @@ public class NettyTransport implements Transport, AutoCloseable {
                     var errorResponse = objectMapper.readValue(bytes, ErrorResponse.class);
                     throw new ExchangeErrorException(errorResponse.error());
                 } catch (JsonProcessingException e1) {
-                    throw new MismatchedResponseTypeException(new String(bytes), responseType);
+                    throw new MismatchedResponseTypeException(new String(bytes), responseType, e);
                 }
             }
         } catch (IOException e) {

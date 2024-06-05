@@ -110,4 +110,99 @@ class DataMessageTest {
         assertTrue(message.witnessSignature().isEmpty());
     }
 
+    @SuppressWarnings("EqualsWithItself")
+    @Test
+    void testEqualsAndHashCodeReflexive() {
+        assertEquals(message, message);
+    }
+
+    @Test
+    void testEqualsAndHashCodeSymmetric() {
+        var matching = copy(message);
+        assertEquals(message, matching);
+        assertEquals(message.hashCode(), matching.hashCode());
+        assertEquals(matching, message);
+    }
+
+    @Test
+    void testEqualsAndHashCodeTransitive() {
+        var matching1 = copy(message);
+        var matching2 = copy(message);
+        assertEquals(message, matching1);
+        assertEquals(message.hashCode(), matching1.hashCode());
+
+        assertEquals(matching1, matching2);
+        assertEquals(matching1.hashCode(), matching2.hashCode());
+
+        assertEquals(message, matching2);
+        assertEquals(message.hashCode(), matching2.hashCode());
+    }
+
+    @Test
+    void testEqualsAndHashCodeConsistent() {
+        var matching = copy(message);
+        assertEquals(message, matching);
+        assertEquals(message.hashCode(), matching.hashCode());
+        assertEquals(message, matching);
+        assertEquals(message.hashCode(), matching.hashCode());
+        assertEquals(message, matching);
+        assertEquals(message.hashCode(), matching.hashCode());
+    }
+
+    @SuppressWarnings("SimplifiableAssertion")
+    @Test
+    void testEqualsNull() {
+        // the point is to test what happens when null is passed and using assertNotNull was not exercising the equals method.
+        assertFalse(message.equals(null));
+    }
+
+    @Test
+    void testEqualsDifferentClass() {
+        assertNotEquals(message, new Object());
+    }
+
+    @Test
+    void testEqualsMessageId() {
+        var messageId = new MessageId(ConnectionId.random(), 0);
+        assertNotEquals(messageId, message.messageId());
+        var notEqual = new DataMessage(messageId, data);
+        message.senderSignature().ifPresent(notEqual::setSenderSignature);
+        message.witnessSignature().ifPresent(notEqual::setWitnessSignature);
+        assertNotEquals(message, notEqual);
+    }
+
+    @Test
+    void testEqualsData() {
+        var data = new byte[]{99};
+        assertNotEquals(message.data(), data);
+        var notEqual = new DataMessage(messageId, data);
+        message.senderSignature().ifPresent(notEqual::setSenderSignature);
+        message.witnessSignature().ifPresent(notEqual::setWitnessSignature);
+        assertNotEquals(message, notEqual);
+    }
+
+    @Test
+    void testEqualsSenderSignature() {
+        var notEqual = new DataMessage(messageId, data);
+        assertTrue(message.senderSignature().isPresent());
+        assertTrue(notEqual.senderSignature().isEmpty());
+        message.witnessSignature().ifPresent(notEqual::setWitnessSignature);
+        assertNotEquals(message, notEqual);
+    }
+
+    @Test
+    void testEqualsWitnessSignature() {
+        var notEqual = new DataMessage(messageId, data);
+        message.senderSignature().ifPresent(notEqual::setSenderSignature);
+        assertTrue(message.witnessSignature().isPresent());
+        assertTrue(notEqual.witnessSignature().isEmpty());
+        assertNotEquals(message, notEqual);
+    }
+
+    private DataMessage copy(DataMessage message) {
+        var copy = new DataMessage(messageId, data);
+        message.senderSignature().ifPresent(copy::setSenderSignature);
+        message.witnessSignature().ifPresent(copy::setWitnessSignature);
+        return copy;
+    }
 }

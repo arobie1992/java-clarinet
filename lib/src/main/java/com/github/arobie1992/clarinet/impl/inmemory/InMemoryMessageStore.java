@@ -17,12 +17,23 @@ public class InMemoryMessageStore implements MessageStore {
             if (existing != null) {
                 throw new ExistingMessageIdException(message.messageId());
             }
-            return message;
+            return copy(message);
         });
     }
 
     @Override
     public Optional<DataMessage> find(MessageId messageId) {
-        return Optional.ofNullable(messages.get(messageId));
+        var message = messages.get(messageId);
+        if (message == null) {
+            return Optional.empty();
+        }
+        return Optional.of(copy(message));
+    }
+
+    private DataMessage copy(DataMessage message) {
+        var copy = new DataMessage(message.messageId(), message.data());
+        message.senderSignature().ifPresent(copy::setSenderSignature);
+        message.witnessSignature().ifPresent(copy::setWitnessSignature);
+        return copy;
     }
 }

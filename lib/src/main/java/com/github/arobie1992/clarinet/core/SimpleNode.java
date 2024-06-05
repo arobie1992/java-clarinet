@@ -16,10 +16,7 @@ import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
 import com.github.arobie1992.clarinet.reputation.Reputation;
 import com.github.arobie1992.clarinet.reputation.ReputationStore;
-import com.github.arobie1992.clarinet.transport.ExchangeHandler;
-import com.github.arobie1992.clarinet.transport.SendHandler;
-import com.github.arobie1992.clarinet.transport.Transport;
-import com.github.arobie1992.clarinet.transport.TransportOptions;
+import com.github.arobie1992.clarinet.transport.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,6 +55,7 @@ class SimpleNode implements Node {
                 new WitnessNotificationHandlerProxy(builder.witnessNotificationHandler, connectionStore, this)
         );
         this.transport.addInternal(Endpoints.MESSAGE.name(), new MessageHandlerProxy(builder.messageHandler, connectionStore, this));
+        this.transport.addInternal(Endpoints.REQUEST_PEERS.name(), new PeersRequestHandlerProxy(builder.peersRequestHandler, this));
 
         this.trustFilter = Objects.requireNonNull(builder.trustFilter, "trustFilter");
         this.reputationStore = Objects.requireNonNull(builder.reputationStore, "reputationStore");
@@ -289,6 +287,26 @@ class SimpleNode implements Node {
         );
     }
 
+    @Override
+    public void addPeersRequestHandler(ExchangeHandler<PeersRequest, PeersResponse> peersRequestHandler) {
+        this.transport.addInternal(Endpoints.REQUEST_PEERS.name(), new PeersRequestHandlerProxy(peersRequestHandler, this));
+    }
+
+    @Override
+    public void removePeersRequestHandler() {
+        this.transport.addInternal(Endpoints.REQUEST_PEERS.name(), new PeersRequestHandlerProxy(null, this));
+    }
+
+    @Override
+    public void addMessageHandler(SendHandler<DataMessage> messageHandler) {
+        this.transport.addInternal(Endpoints.MESSAGE.name(), new MessageHandlerProxy(messageHandler, connectionStore, this));
+    }
+
+    @Override
+    public void removeMessageHandler() {
+        this.transport.addInternal(Endpoints.MESSAGE.name(), new MessageHandlerProxy(null, connectionStore, this));
+    }
+
     static class Builder implements NodeBuilder {
         private PeerId id;
         private PeerStore peerStore;
@@ -301,6 +319,7 @@ class SimpleNode implements Node {
         private MessageStore messageStore;
         private KeyStore keyStore;
         private SendHandler<DataMessage> messageHandler;
+        private ExchangeHandler<PeersRequest, PeersResponse> peersRequestHandler;
 
         @Override
         public NodeBuilder id(PeerId id) {
@@ -365,6 +384,12 @@ class SimpleNode implements Node {
         @Override
         public NodeBuilder messageHandler(SendHandler<DataMessage> messageHandler) {
             this.messageHandler = messageHandler;
+            return this;
+        }
+
+        @Override
+        public NodeBuilder peersRequestHandler(ExchangeHandler<PeersRequest, PeersResponse> peersRequestHandler) {
+            this.peersRequestHandler = peersRequestHandler;
             return this;
         }
 

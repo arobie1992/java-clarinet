@@ -1,6 +1,7 @@
 package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.crypto.KeyStore;
+import com.github.arobie1992.clarinet.message.DataMessage;
 import com.github.arobie1992.clarinet.message.MessageId;
 import com.github.arobie1992.clarinet.message.MessageStore;
 import com.github.arobie1992.clarinet.peer.PeerId;
@@ -53,4 +54,12 @@ public interface Node {
     void removeWitnessHandler();
 
     void removeWitnessNotificationHandler();
+
+    void addPeersRequestHandler(ExchangeHandler<PeersRequest, PeersResponse> peersRequestHandler);
+
+    void removePeersRequestHandler();
+
+    void addMessageHandler(SendHandler<DataMessage> messageHandler);
+
+    void removeMessageHandler();
 }
