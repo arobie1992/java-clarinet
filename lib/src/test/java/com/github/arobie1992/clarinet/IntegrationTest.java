@@ -8,6 +8,7 @@ import com.github.arobie1992.clarinet.adt.None;
 import com.github.arobie1992.clarinet.adt.Some;
 import com.github.arobie1992.clarinet.core.*;
 import com.github.arobie1992.clarinet.crypto.PublicKey;
+import com.github.arobie1992.clarinet.impl.crypto.KeyProviders;
 import com.github.arobie1992.clarinet.impl.crypto.Keys;
 import com.github.arobie1992.clarinet.impl.inmemory.InMemoryKeyStore;
 import com.github.arobie1992.clarinet.impl.inmemory.InMemoryMessageStore;
@@ -41,6 +42,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -72,6 +74,7 @@ class IntegrationTest {
                 .build();
         sender.transport().add(new UriAddress(new URI("tcp://localhost:0")));
         sender.keyStore().addKeyPair(sender.id(), Keys.generateKeyPair());
+        sender.keyStore().addProvider(KeyProviders.javaSignatureSha256RsaPublicKeyProvider());
 
         witness = Nodes.newBuilder().id(PeerUtils.witnessId())
                 .peerStore(new InMemoryPeerStore())
@@ -83,6 +86,7 @@ class IntegrationTest {
                 .build();
         witness.transport().add(new UriAddress(new URI("tcp://localhost:0")));
         witness.keyStore().addKeyPair(witness.id(), Keys.generateKeyPair());
+        witness.keyStore().addProvider(KeyProviders.javaSignatureSha256RsaPublicKeyProvider());
 
         receiver = Nodes.newBuilder().id(PeerUtils.receiverId())
                 .peerStore(new InMemoryPeerStore())
@@ -93,6 +97,8 @@ class IntegrationTest {
                 .keyStore(new InMemoryKeyStore())
                 .build();
         receiver.transport().add(new UriAddress(new URI("tcp://localhost:0")));
+        receiver.keyStore().addProvider(KeyProviders.javaSignatureSha256RsaPublicKeyProvider());
+
         witnessNotificationLatch = new CountDownLatch(1);
         messageLatch = new CountDownLatch(1);
     }
@@ -155,7 +161,8 @@ class IntegrationTest {
         var connectionId = sender.connect(receiver.id(), new ConnectionOptions(), TransportUtils.defaultOptions());
         var expected = new TestConnection(connectionId, sender.id(), Optional.of(witness.id()), receiver.id(), Connection.Status.OPEN);
         // need latch to ensure test doesn't do verification before the witness notification handler has executed
-        witnessNotificationLatch.await();
+        // if it waited all 5 seconds, something's probably wrong and we want to revisit this.
+        assertTrue(witnessNotificationLatch.await(5, TimeUnit.SECONDS));
         verifyConnectionPresent(expected, sender);
         verifyConnectionPresent(expected, witness);
         verifyConnectionPresent(expected, receiver);
@@ -164,7 +171,8 @@ class IntegrationTest {
         var data = new byte[]{0, 1, 2, 3, 4};
         var messageId = sender.send(connectionId, data, TransportUtils.defaultOptions());
         // need latch to ensure test doesn't do verification before the receiver gets the message
-        messageLatch.await();
+        // if it waited all 5 seconds, something's probably wrong and we want to revisit this.
+        assertTrue(messageLatch.await(5, TimeUnit.SECONDS));
         verifyMessage(sender, messageId, 0, data, MessageVerificationMode.SENDER_ONLY);
         verifyMessage(witness, messageId, 0, data, MessageVerificationMode.SENDER_AND_WITNESS);
         verifyMessage(receiver, messageId, 0, data, MessageVerificationMode.SENDER_AND_WITNESS);

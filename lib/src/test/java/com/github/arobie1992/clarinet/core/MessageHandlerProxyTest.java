@@ -1,5 +1,7 @@
 package com.github.arobie1992.clarinet.core;
 
+import com.github.arobie1992.clarinet.crypto.KeyStore;
+import com.github.arobie1992.clarinet.crypto.PublicKey;
 import com.github.arobie1992.clarinet.message.DataMessage;
 import com.github.arobie1992.clarinet.message.MessageId;
 import com.github.arobie1992.clarinet.message.MessageStore;
@@ -64,6 +66,13 @@ class MessageHandlerProxyTest {
         peerStore = mock(PeerStore.class);
         when(node.peerStore()).thenReturn(peerStore);
         when(peerStore.find(remoteInformation.peer().id())).thenReturn(Optional.empty());
+
+        // TODO for now just get the tests not failing. Once we use the keys will test.
+        KeyStore keyStore = mock(KeyStore.class);
+        when(node.keyStore()).thenReturn(keyStore);
+        PublicKey publicKey = mock(PublicKey.class);
+        when(keyStore.findPublicKeys(connection.sender())).thenReturn(List.of(publicKey));
+        when(keyStore.findPublicKeys(connection.witness().orElseThrow())).thenReturn(List.of(publicKey));
     }
 
     @Test

@@ -29,6 +29,10 @@ public interface NodeBuilder {
      * @return {@code this} builder for fluent building.
      */
     NodeBuilder transport(Supplier<Transport> transportFactory);
+    NodeBuilder reputationStore(ReputationStore reputationStore);
+    NodeBuilder messageStore(MessageStore messageStore);
+    NodeBuilder keyStore(KeyStore keyStore);
+    NodeBuilder trustFilter(Function<Stream<? extends Reputation>, Stream<PeerId>> trustFunction);
 
     /**
      * User-defined behavior for determining whether to accept a connection.
@@ -40,8 +44,6 @@ public interface NodeBuilder {
      * @return {@code this} builder for fluent building.
      */
     NodeBuilder connectHandler(ExchangeHandler<ConnectRequest, ConnectResponse> connectHandler);
-    NodeBuilder trustFilter(Function<Stream<? extends Reputation>, Stream<PeerId>> trustFunction);
-    NodeBuilder reputationStore(ReputationStore reputationStore);
 
     /**
      * User-defined behavior for determining whether to be witness to a connection.
@@ -62,10 +64,6 @@ public interface NodeBuilder {
      * @return {@code this} builder for fluent building.
      */
     NodeBuilder witnessNotificationHandler(SendHandler<WitnessNotification> witnessNotificationHandler);
-
-    NodeBuilder messageStore(MessageStore messageStore);
-
-    NodeBuilder keyStore(KeyStore keyStore);
 
     /**
      * User-defined behavior for messages. This handler is called both when a node serves as the receiver and as the

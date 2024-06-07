@@ -43,6 +43,8 @@ public interface Node {
 
     PeersResponse requestPeers(PeerId requestee, PeersRequest request, TransportOptions transportOptions);
 
+    KeysResponse requestKeys(PeerId requestee, KeysRequest request, TransportOptions transportOptions);
+
     void addConnectHandler(ExchangeHandler<ConnectRequest, ConnectResponse> connectHandler);
 
     void removeConnectHandler();

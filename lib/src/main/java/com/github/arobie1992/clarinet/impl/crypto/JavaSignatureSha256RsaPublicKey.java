@@ -27,4 +27,14 @@ public class JavaSignatureSha256RsaPublicKey implements PublicKey {
             throw new VerificationException(e);
         }
     }
+
+    @Override
+    public String algorithm() {
+        return "SHA256withRSA";
+    }
+
+    @Override
+    public byte[] bytes() {
+        return javaKey.getEncoded();
+    }
 }

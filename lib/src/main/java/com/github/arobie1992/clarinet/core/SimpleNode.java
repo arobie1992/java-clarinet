@@ -252,6 +252,14 @@ class SimpleNode implements Node {
     }
 
     @Override
+    public KeysResponse requestKeys(PeerId requestee, KeysRequest request, TransportOptions transportOptions) {
+        var peer = peerStore.find(requestee).orElseThrow(() -> new NoSuchPeerException(requestee));
+        return exchangeForPeer(peer, Endpoints.REQUEST_KEYS.name(), request, KeysResponse.class, transportOptions)
+                .findFirst()
+                .orElseThrow(() -> new KeysRequestException(requestee));
+    }
+
+    @Override
     public void addConnectHandler(ExchangeHandler<ConnectRequest, ConnectResponse> connectHandler) {
         this.transport.addInternal(Endpoints.CONNECT.name(), new ConnectHandlerProxy(connectHandler, connectionStore, this));
     }

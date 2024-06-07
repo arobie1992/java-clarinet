@@ -27,4 +27,14 @@ public class JavaSignatureSha256RsaPrivateKey implements PrivateKey {
             throw new SigningException(e);
         }
     }
+
+    @Override
+    public String algorithm() {
+        return "SHA256withRSA";
+    }
+
+    @Override
+    public byte[] bytes() {
+        return javaKey.getEncoded();
+    }
 }

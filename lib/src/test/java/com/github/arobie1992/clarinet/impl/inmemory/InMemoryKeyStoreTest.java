@@ -3,6 +3,7 @@ package com.github.arobie1992.clarinet.impl.inmemory;
 import com.github.arobie1992.clarinet.crypto.KeyPair;
 import com.github.arobie1992.clarinet.crypto.PrivateKey;
 import com.github.arobie1992.clarinet.crypto.PublicKey;
+import com.github.arobie1992.clarinet.crypto.PublicKeyProvider;
 import com.github.arobie1992.clarinet.testutils.PeerUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 
 class InMemoryKeyStoreTest {
 
@@ -19,12 +21,28 @@ class InMemoryKeyStoreTest {
         public byte[] sign(byte[] data) {
             return new byte[0];
         }
+        @Override
+        public String algorithm() {
+            return "";
+        }
+        @Override
+        public byte[] bytes() {
+            return new byte[0];
+        }
     }
 
     private record TestPublicKey(int value) implements PublicKey {
         @Override
         public boolean verify(byte[] data, byte[] signature) {
             return false;
+        }
+        @Override
+        public String algorithm() {
+            return "";
+        }
+        @Override
+        public byte[] bytes() {
+            return new byte[0];
         }
     }
 
@@ -65,6 +83,13 @@ class InMemoryKeyStoreTest {
         assertThrows(UnsupportedOperationException.class, () -> keys.add(key2));
         store.addPublicKey(PeerUtils.senderId(), key2);
         assertEquals(List.of(key, key2), store.findPublicKeys(PeerUtils.senderId()));
+    }
+
+    @Test
+    void testAddProvider() {
+        var provider = mock(PublicKeyProvider.class);
+        store.addProvider(provider);
+        assertEquals(List.of(provider), store.providers().toList());
     }
 
 }
