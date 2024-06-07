@@ -64,4 +64,8 @@ public interface Node {
     void addMessageHandler(SendHandler<DataMessage> messageHandler);
 
     void removeMessageHandler();
+
+    void addKeysRequestHandler(ExchangeHandler<KeysRequest, KeysResponse> keysRequestHandler);
+
+    void removeKeysRequestHandler();
 }

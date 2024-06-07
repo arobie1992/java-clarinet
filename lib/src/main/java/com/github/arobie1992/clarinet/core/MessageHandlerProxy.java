@@ -94,7 +94,7 @@ class MessageHandlerProxy implements SendHandler<DataMessage> {
                             .filter(p -> p.supports(k.algorithm()))
                             .map(p -> {
                                 try {
-                                    return p.create(k.keyBytes());
+                                    return p.create(k.bytes());
                                 } catch (RuntimeException e) {
                                     return null;
                                 }

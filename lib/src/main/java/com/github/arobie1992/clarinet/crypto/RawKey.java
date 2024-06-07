@@ -1,4 +1,4 @@
 package com.github.arobie1992.clarinet.crypto;
 
-public record RawKey(String algorithm, byte[] keyBytes) {
+public record RawKey(String algorithm, byte[] bytes) implements Key {
 }

@@ -56,6 +56,7 @@ class SimpleNode implements Node {
         );
         this.transport.addInternal(Endpoints.MESSAGE.name(), new MessageHandlerProxy(builder.messageHandler, connectionStore, this));
         this.transport.addInternal(Endpoints.REQUEST_PEERS.name(), new PeersRequestHandlerProxy(builder.peersRequestHandler, this));
+        this.transport.addInternal(Endpoints.REQUEST_KEYS.name(), new KeysRequestHandlerProxy(builder.keysRequestHandler, this));
 
         this.trustFilter = Objects.requireNonNull(builder.trustFilter, "trustFilter");
         this.reputationStore = Objects.requireNonNull(builder.reputationStore, "reputationStore");
@@ -315,6 +316,16 @@ class SimpleNode implements Node {
         this.transport.addInternal(Endpoints.MESSAGE.name(), new MessageHandlerProxy(null, connectionStore, this));
     }
 
+    @Override
+    public void addKeysRequestHandler(ExchangeHandler<KeysRequest, KeysResponse> keysRequestHandler) {
+        this.transport.addInternal(Endpoints.REQUEST_KEYS.name(), new KeysRequestHandlerProxy(keysRequestHandler, this));
+    }
+
+    @Override
+    public void removeKeysRequestHandler() {
+        this.transport.addInternal(Endpoints.REQUEST_KEYS.name(), new KeysRequestHandlerProxy(null, this));
+    }
+
     static class Builder implements NodeBuilder {
         private PeerId id;
         private PeerStore peerStore;
@@ -328,6 +339,7 @@ class SimpleNode implements Node {
         private KeyStore keyStore;
         private SendHandler<DataMessage> messageHandler;
         private ExchangeHandler<PeersRequest, PeersResponse> peersRequestHandler;
+        private ExchangeHandler<KeysRequest, KeysResponse> keysRequestHandler;
 
         @Override
         public NodeBuilder id(PeerId id) {
@@ -398,6 +410,12 @@ class SimpleNode implements Node {
         @Override
         public NodeBuilder peersRequestHandler(ExchangeHandler<PeersRequest, PeersResponse> peersRequestHandler) {
             this.peersRequestHandler = peersRequestHandler;
+            return this;
+        }
+
+        @Override
+        public NodeBuilder keysRequestHandler(ExchangeHandler<KeysRequest, KeysResponse> keysRequestHandler) {
+            this.keysRequestHandler = keysRequestHandler;
             return this;
         }
 

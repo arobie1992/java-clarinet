@@ -89,5 +89,16 @@ public interface NodeBuilder {
      */
     NodeBuilder peersRequestHandler(ExchangeHandler<PeersRequest, PeersResponse> peersRequestHandler);
 
+    /**
+     * User behavior for how to respond to a {@link KeysRequest}.
+     * <p>
+     * No provided handler means the system should construct the response to the best of its ability. Providing a
+     * handler means that the system will return the user-provided response exactly as is.
+     *
+     * @param keysRequestHandler The handler implementing the user-desired behavior.
+     * @return {@code this} builder for fluent building.
+     */
+    NodeBuilder keysRequestHandler(ExchangeHandler<KeysRequest, KeysResponse> keysRequestHandler);
+
     Node build();
 }
