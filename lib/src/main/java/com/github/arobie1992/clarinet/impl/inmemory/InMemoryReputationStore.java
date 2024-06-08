@@ -19,7 +19,14 @@ public class InMemoryReputationStore implements ReputationStore {
 
     @Override
     public void save(Reputation reputation) {
-        reputations.put(reputation.peerId(), reputation);
+        // Do a copy so mutations to the reputation don't persist unless saved
+        reputations.put(reputation.peerId(), reputation.copy());
+    }
+
+    @Override
+    public Reputation find(PeerId peerId) {
+        // Do a copy so mutations to the reputation don't persist unless saved
+        return reputations.computeIfAbsent(peerId, defaultReputation).copy();
     }
 
     @Override

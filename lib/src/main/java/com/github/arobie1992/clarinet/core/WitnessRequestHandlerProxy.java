@@ -6,12 +6,12 @@ import com.github.arobie1992.clarinet.transport.RemoteInformation;
 
 import java.util.Objects;
 
-class WitnessHandlerProxy implements ExchangeHandler<WitnessRequest, WitnessResponse> {
+class WitnessRequestHandlerProxy implements ExchangeHandler<WitnessRequest, WitnessResponse> {
     private final ExchangeHandler<WitnessRequest, WitnessResponse> userHandler;
     private final ConnectionStore connectionStore;
     private final Node node;
 
-    WitnessHandlerProxy(ExchangeHandler<WitnessRequest, WitnessResponse> userHandler, ConnectionStore connectionStore, Node node) {
+    WitnessRequestHandlerProxy(ExchangeHandler<WitnessRequest, WitnessResponse> userHandler, ConnectionStore connectionStore, Node node) {
         this.userHandler = userHandler == null ? DEFAULT_HANDLER : userHandler;
         this.connectionStore = Objects.requireNonNull(connectionStore);
         this.node = Objects.requireNonNull(node);

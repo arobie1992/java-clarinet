@@ -8,6 +8,16 @@ public interface ReputationStore {
     void save(Reputation reputation);
 
     /**
+     * Find the reputation corresponding to the given peer.
+     * <p>
+     * This function must return a reputation for the peer. If, for example, the backing store does not have a
+     * reputation for the peer, then an implementation should provide a sane default.
+     * @param peerId the peer to find reputations for
+     * @return the reputations for the given peer.
+     */
+    Reputation find(PeerId peerId);
+
+    /**
      * Find the reputations corresponding to all the given peers.
      * <p>
      * This function must return a reputation for all peers. If, for example, the backing store does not have a

@@ -6,6 +6,7 @@ import com.github.arobie1992.clarinet.message.MessageId;
 import com.github.arobie1992.clarinet.message.MessageStore;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
+import com.github.arobie1992.clarinet.reputation.ReputationStore;
 import com.github.arobie1992.clarinet.transport.ExchangeHandler;
 import com.github.arobie1992.clarinet.transport.SendHandler;
 import com.github.arobie1992.clarinet.transport.Transport;
@@ -15,6 +16,8 @@ public interface Node {
     PeerId id();
     PeerStore peerStore();
     Transport transport();
+
+    ReputationStore reputationStore();
 
     Connection.ReadableReference findConnection(ConnectionId connectionId);
 
@@ -49,11 +52,11 @@ public interface Node {
 
     void removeConnectHandler();
 
-    void addWitnessHandler(ExchangeHandler<WitnessRequest, WitnessResponse> witnessHandler);
+    void addWitnessRequestHandler(ExchangeHandler<WitnessRequest, WitnessResponse> witnessHandler);
 
     void addWitnessNotificationHandler(SendHandler<WitnessNotification> witnessNotificationHandler);
 
-    void removeWitnessHandler();
+    void removeWitnessRequestHandler();
 
     void removeWitnessNotificationHandler();
 

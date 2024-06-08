@@ -49,7 +49,10 @@ class SimpleNode implements Node {
 
         this.transport = new TransportProxy(Objects.requireNonNull(builder.transportFactory.get()));
         this.transport.addInternal(Endpoints.CONNECT.name(), new ConnectHandlerProxy(builder.connectHandler, connectionStore, this));
-        this.transport.addInternal(Endpoints.WITNESS.name(), new WitnessHandlerProxy(builder.witnessHandler, connectionStore, this));
+        this.transport.addInternal(
+                Endpoints.WITNESS.name(),
+                new WitnessRequestHandlerProxy(builder.witnessRequestHandler, connectionStore, this)
+        );
         this.transport.addInternal(
                 Endpoints.WITNESS_NOTIFICATION.name(),
                 new WitnessNotificationHandlerProxy(builder.witnessNotificationHandler, connectionStore, this)
@@ -83,6 +86,11 @@ class SimpleNode implements Node {
     @Override
     public Transport transport() {
         return transport;
+    }
+
+    @Override
+    public ReputationStore reputationStore() {
+        return reputationStore;
     }
 
     @Override
@@ -271,13 +279,13 @@ class SimpleNode implements Node {
     }
 
     @Override
-    public void addWitnessHandler(ExchangeHandler<WitnessRequest, WitnessResponse> witnessHandler) {
-        this.transport.addInternal(Endpoints.WITNESS.name(), new WitnessHandlerProxy(witnessHandler, connectionStore, this));
+    public void addWitnessRequestHandler(ExchangeHandler<WitnessRequest, WitnessResponse> witnessRequestHandler) {
+        this.transport.addInternal(Endpoints.WITNESS.name(), new WitnessRequestHandlerProxy(witnessRequestHandler, connectionStore, this));
     }
 
     @Override
-    public void removeWitnessHandler() {
-        this.transport.addInternal(Endpoints.WITNESS.name(), new WitnessHandlerProxy(null, connectionStore, this));
+    public void removeWitnessRequestHandler() {
+        this.transport.addInternal(Endpoints.WITNESS.name(), new WitnessRequestHandlerProxy(null, connectionStore, this));
     }
 
     @Override
@@ -333,7 +341,7 @@ class SimpleNode implements Node {
         private ExchangeHandler<ConnectRequest, ConnectResponse> connectHandler;
         private Function<Stream<? extends Reputation>, Stream<PeerId>> trustFilter;
         private ReputationStore reputationStore;
-        private ExchangeHandler<WitnessRequest, WitnessResponse> witnessHandler;
+        private ExchangeHandler<WitnessRequest, WitnessResponse> witnessRequestHandler;
         private SendHandler<WitnessNotification> witnessNotificationHandler;
         private MessageStore messageStore;
         private KeyStore keyStore;
@@ -378,8 +386,8 @@ class SimpleNode implements Node {
         }
 
         @Override
-        public NodeBuilder witnessHandler(ExchangeHandler<WitnessRequest, WitnessResponse> witnessHandler) {
-            this.witnessHandler = witnessHandler;
+        public NodeBuilder witnessRequestHandler(ExchangeHandler<WitnessRequest, WitnessResponse> witnessRequestHandler) {
+            this.witnessRequestHandler = witnessRequestHandler;
             return this;
         }
 

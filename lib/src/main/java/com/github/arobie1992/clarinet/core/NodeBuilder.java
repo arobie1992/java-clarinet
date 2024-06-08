@@ -51,10 +51,10 @@ public interface NodeBuilder {
      * The returned {@code WitnessResponse} is used to determine if the node should create the connection or not. Users
      * do not need to perform any of these operations themselves. <b>This field is optional; however, if not specified,
      * all witness requests are accepted.</b>
-     * @param witnessHandler The handler implementing the user-desired behavior.
+     * @param witnessRequestHandler The handler implementing the user-desired behavior.
      * @return {@code this} builder for fluent building.
      */
-    NodeBuilder witnessHandler(ExchangeHandler<WitnessRequest, WitnessResponse> witnessHandler);
+    NodeBuilder witnessRequestHandler(ExchangeHandler<WitnessRequest, WitnessResponse> witnessRequestHandler);
 
     /**
      * User-defined behavior for dealing with witness notifications.

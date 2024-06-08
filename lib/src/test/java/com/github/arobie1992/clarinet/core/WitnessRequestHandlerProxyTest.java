@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-class WitnessHandlerProxyTest {
+class WitnessRequestHandlerProxyTest {
 
     private final RemoteInformation remoteInformation = new RemoteInformation(
             new Peer(PeerUtils.senderId(), new HashSet<>(Set.of(AddressUtils.defaultAddress()))),
@@ -29,7 +29,7 @@ class WitnessHandlerProxyTest {
     private ExchangeHandler<WitnessRequest, WitnessResponse> handler;
     private ConnectionStore connectionStore;
     private Node node;
-    private WitnessHandlerProxy handlerProxy;
+    private WitnessRequestHandlerProxy handlerProxy;
     private PeerStore peerStore;
     private ConnectionImpl connection;
 
@@ -39,7 +39,7 @@ class WitnessHandlerProxyTest {
         handler = (ExchangeHandler<WitnessRequest, WitnessResponse>) mock(ExchangeHandler.class);
         connectionStore = mock(ConnectionStore.class);
         node = mock(Node.class);
-        handlerProxy = new WitnessHandlerProxy(null, connectionStore, node);
+        handlerProxy = new WitnessRequestHandlerProxy(null, connectionStore, node);
         peerStore = mock(PeerStore.class);
         when(node.peerStore()).thenReturn(peerStore);
         when(peerStore.find(remoteInformation.peer().id())).thenReturn(Optional.empty());
@@ -67,17 +67,17 @@ class WitnessHandlerProxyTest {
 
     @Test
     void testNullConnectionStore() {
-        assertThrows(NullPointerException.class, () -> new WitnessHandlerProxy(handler, null, node));
+        assertThrows(NullPointerException.class, () -> new WitnessRequestHandlerProxy(handler, null, node));
     }
 
     @Test
     void testNullNode() {
-        assertThrows(NullPointerException.class, () -> new WitnessHandlerProxy(handler, connectionStore, null));
+        assertThrows(NullPointerException.class, () -> new WitnessRequestHandlerProxy(handler, connectionStore, null));
     }
 
     @Test
     void testUserHandlerRejects() {
-        handlerProxy = new WitnessHandlerProxy(handler, connectionStore, node);
+        handlerProxy = new WitnessRequestHandlerProxy(handler, connectionStore, node);
         var expected = new Some<>(new WitnessResponse(true, "test reject"));
         when(handler.handle(remoteInformation, witnessRequest)).thenReturn(expected);
         assertEquals(expected, handlerProxy.handle(remoteInformation, witnessRequest));
@@ -116,7 +116,7 @@ class WitnessHandlerProxyTest {
 
     @Test
     void testUserHandlerReturnsNull() {
-        handlerProxy = assertDoesNotThrow(() -> new WitnessHandlerProxy(handler, connectionStore, node));
+        handlerProxy = assertDoesNotThrow(() -> new WitnessRequestHandlerProxy(handler, connectionStore, node));
         var ex = assertThrows(NullPointerException.class, () -> handlerProxy.handle(remoteInformation, witnessRequest));
         assertEquals("User handler returned a null WitnessResponse", ex.getMessage());
     }

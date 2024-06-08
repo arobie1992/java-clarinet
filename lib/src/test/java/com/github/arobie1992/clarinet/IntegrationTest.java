@@ -119,7 +119,7 @@ class IntegrationTest {
             }
         });
 
-        witness.addWitnessHandler(new ExchangeHandler<>() {
+        witness.addWitnessRequestHandler(new ExchangeHandler<>() {
             @Override
             public Some<WitnessResponse> handle(RemoteInformation remoteInformation, WitnessRequest message) {
                 var neededPeers = new HashSet<PeerId>();
@@ -176,6 +176,13 @@ class IntegrationTest {
         verifyMessage(sender, messageId, 0, data, MessageVerificationMode.SENDER_ONLY);
         verifyMessage(witness, messageId, 0, data, MessageVerificationMode.SENDER_AND_WITNESS);
         verifyMessage(receiver, messageId, 0, data, MessageVerificationMode.SENDER_AND_WITNESS);
+
+        verifyReputation(sender, witness.id(), 1);
+        verifyReputation(sender, receiver.id(), 1);
+        verifyReputation(witness, sender.id(), 1);
+        verifyReputation(witness, receiver.id(), 1);
+        verifyReputation(receiver, sender.id(), 1);
+        verifyReputation(receiver, witness.id(), 1);
 
         fail("Test reputation, and querying");
 
@@ -339,5 +346,10 @@ class IntegrationTest {
     private void verifyMessage(Collection<PublicKey> pubKeys, byte[] data, byte[] signature) {
         var key = pubKeys.iterator().next();
         assertTrue(key.verify(data, signature));
+    }
+
+    private void verifyReputation(Node node, PeerId peerId, double expected) {
+        var reputation = node.reputationStore().find(peerId);
+        assertEquals(expected, reputation.value());
     }
 }
