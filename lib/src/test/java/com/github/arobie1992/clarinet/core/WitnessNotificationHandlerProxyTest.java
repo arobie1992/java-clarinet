@@ -90,8 +90,11 @@ class WitnessNotificationHandlerProxyTest {
     @Test
     void testConnectionNotAwaitingWitness() {
         connection.setStatus(Connection.Status.REQUESTING_RECEIVER);
-        var ex = assertThrows(UnsupportedOperationException.class, () -> handlerProxy.handle(remoteInformation, witnessNotification));
-        assertEquals("Connection " + witnessNotification.connectionId() + " is not awaiting witness.", ex.getMessage());
+        var ex = assertThrows(ConnectionStatusException.class, () -> handlerProxy.handle(remoteInformation, witnessNotification));
+        var expected = "Connection "
+                + witnessNotification.connectionId()
+                + " must be in [AWAITING_WITNESS] to perform setWitness but was in REQUESTING_RECEIVER";
+        assertEquals(expected, ex.getMessage());
     }
 
     @Test
