@@ -25,8 +25,7 @@ class WitnessRequestHandlerProxy implements ExchangeHandler<WitnessRequest, Witn
 
         var resp = Objects.requireNonNull(userHandler.handle(remoteInformation, message), "User handler returned a null WitnessResponse");
         if(!resp.value().rejected()) {
-            connectionStore.accept(message.connectionId(), message.sender(), message.receiver(), Connection.Status.OPEN);
-            try(var ref = connectionStore.findForWrite(message.connectionId())) {
+            try(var ref = connectionStore.accept(message.connectionId(), message.sender(), message.receiver(), Connection.Status.OPEN)) {
                 switch (ref) {
                     // setWitness automatically persists back to the reference so no need to do any saving
                     case Writeable(ConnectionImpl conn) -> conn.setWitness(node.id());

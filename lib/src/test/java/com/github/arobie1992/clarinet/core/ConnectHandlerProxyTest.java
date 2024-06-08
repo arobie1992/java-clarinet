@@ -27,16 +27,28 @@ class ConnectHandlerProxyTest {
 
     private ExchangeHandler<ConnectRequest, ConnectResponse> handler;
     private ConnectionStore connectionStore;
+    private ConnectionImpl connection;
     private Node node;
     private ConnectHandlerProxy connectHandlerProxy;
     private PeerStore peerStore;
 
     @BeforeEach
     public void setUp() {
+        node = mock(Node.class);
+        when(node.id()).thenReturn(PeerUtils.receiverId());
+
         //noinspection unchecked
         handler = (ExchangeHandler<ConnectRequest, ConnectResponse>) mock(ExchangeHandler.class);
         connectionStore = mock(ConnectionStore.class);
-        node = mock(Node.class);
+        connection = new ConnectionImpl(
+                connectRequest.connectionId(),
+                connectRequest.sender(),
+                PeerUtils.receiverId(),
+                Connection.Status.AWAITING_WITNESS
+        );
+        connection.lock.writeLock().lock();
+        when(connectionStore.accept(connectRequest.connectionId(), connection.sender(), node.id(), Connection.Status.AWAITING_WITNESS))
+                .thenReturn(new Writeable(connection));
         connectHandlerProxy = new ConnectHandlerProxy(null, connectionStore, node);
         peerStore = mock(PeerStore.class);
         when(node.peerStore()).thenReturn(peerStore);
@@ -46,7 +58,6 @@ class ConnectHandlerProxyTest {
     @Test
     void testNullHandler() {
         var expected = new Some<>(new ConnectResponse(false, null));
-        when(node.id()).thenReturn(PeerUtils.receiverId());
         var actual = connectHandlerProxy.handle(remoteInformation, connectRequest);
         assertEquals(expected, actual);
         verify(connectionStore).accept(

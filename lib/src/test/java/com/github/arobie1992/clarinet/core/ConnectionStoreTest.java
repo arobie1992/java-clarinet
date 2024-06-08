@@ -22,7 +22,12 @@ class ConnectionStoreTest {
     @BeforeEach
     void setUp() {
         connectionStore = new ConnectionStore();
-        connectionId = connectionStore.create(PeerUtils.senderId(), PeerUtils.receiverId(), Connection.Status.OPEN);
+        try(var ref = connectionStore.create(PeerUtils.senderId(), PeerUtils.receiverId(), Connection.Status.OPEN)) {
+            if(!(ref instanceof Writeable(ConnectionImpl conn))) {
+                throw new IllegalStateException("Something went wrong when creating connection");
+            }
+            connectionId = conn.id();
+         }
     }
 
     @Test
@@ -45,7 +50,7 @@ class ConnectionStoreTest {
     }
 
     @Test
-    void testAccept() throws Exception {
+    void testAccept() {
         var connectionId = ConnectionId.random();
         connectionStore.accept(connectionId, PeerUtils.senderId(), PeerUtils.receiverId(), Connection.Status.OPEN);
         try(var ref = connectionStore.findForRead(connectionId)) {
@@ -59,14 +64,14 @@ class ConnectionStoreTest {
     }
 
     @Test
-    void testFindForReadAbsent() throws Exception {
+    void testFindForReadAbsent() {
         try(var ref = connectionStore.findForRead(ConnectionId.random())) {
             assertEquals(Connection.Absent.class, ref.getClass());
         }
     }
 
     @Test
-    void testFindForRead() throws Exception {
+    void testFindForRead() {
         try(var ref = connectionStore.findForRead(connectionId)) {
             if (ref instanceof Connection.Readable(Connection connection)) {
                 new TestConnection(connectionId, PeerUtils.senderId(), Optional.empty(), PeerUtils.receiverId(), Connection.Status.OPEN)
@@ -78,7 +83,7 @@ class ConnectionStoreTest {
     }
 
     @Test
-    void testFindForWriteAbsent() throws Exception {
+    void testFindForWriteAbsent() {
         try(var ref = connectionStore.findForWrite(ConnectionId.random())) {
             assertEquals(Connection.Absent.class, ref.getClass());
         }

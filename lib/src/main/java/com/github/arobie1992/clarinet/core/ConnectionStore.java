@@ -10,19 +10,21 @@ import java.util.concurrent.ConcurrentHashMap;
 class ConnectionStore {
     private final Map<ConnectionId, Connection> connections = new ConcurrentHashMap<>();
 
-    ConnectionId create(PeerId sender, PeerId receiver, Connection.Status status) {
+    WriteableReference create(PeerId sender, PeerId receiver, Connection.Status status) {
         var connectionId = ConnectionId.random();
-        accept(connectionId, sender, receiver, status);
-        return connectionId;
+        return accept(connectionId, sender, receiver, status);
     }
 
-    void accept(ConnectionId connectionId, PeerId sender, PeerId receiver, Connection.Status status) {
-        connections.compute(connectionId, (id, existing) -> {
+    WriteableReference accept(ConnectionId connectionId, PeerId sender, PeerId receiver, Connection.Status status) {
+        var connection = connections.compute(connectionId, (id, existing) -> {
             if (existing != null) {
                 throw new ExistingConnectionIdException(id);
             }
-            return new ConnectionImpl(connectionId, sender, receiver, status);
+            var conn = new ConnectionImpl(connectionId, sender, receiver, status);
+            conn.lock.writeLock().lock();
+            return conn;
         });
+        return new Writeable((ConnectionImpl) connection);
     }
 
     Connection.ReadableReference findForRead(ConnectionId connectionId) {

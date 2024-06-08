@@ -25,7 +25,8 @@ class ConnectHandlerProxy implements ExchangeHandler<ConnectRequest, ConnectResp
 
         var resp = Objects.requireNonNull(userHandler.handle(remoteInformation, message), "User handler returned a null ConnectResponse");
         if(!resp.value().rejected()) {
-            connectionStore.accept(message.connectionId(), message.sender(), node.id(), Connection.Status.AWAITING_WITNESS);
+            // no further work to do so just close the ref
+            connectionStore.accept(message.connectionId(), message.sender(), node.id(), Connection.Status.AWAITING_WITNESS).close();
         }
 
         return resp;

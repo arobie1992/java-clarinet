@@ -45,7 +45,8 @@ class WitnessRequestHandlerProxyTest {
         when(peerStore.find(remoteInformation.peer().id())).thenReturn(Optional.empty());
         connection = new ConnectionImpl(witnessRequest.connectionId(), witnessRequest.sender(), witnessRequest.receiver(), Connection.Status.OPEN);
         connection.lock.writeLock().lock();
-        when(connectionStore.findForWrite(witnessRequest.connectionId())).thenReturn(new Writeable(connection));
+        when(connectionStore.accept(witnessRequest.connectionId(), connection.sender(), connection.receiver(), Connection.Status.OPEN))
+                .thenReturn(new Writeable(connection));
     }
 
 
@@ -88,7 +89,8 @@ class WitnessRequestHandlerProxyTest {
     @Test
     void handleFailsToFindConnection() {
         when(node.id()).thenReturn(PeerUtils.witnessId());
-        when(connectionStore.findForWrite(witnessRequest.connectionId())).thenReturn(new Connection.Absent());
+        when(connectionStore.accept(witnessRequest.connectionId(), connection.sender(), connection.receiver(), Connection.Status.OPEN))
+                .thenReturn(new Connection.Absent());
         var ex = assertThrows(IllegalStateException.class, () -> handlerProxy.handle(remoteInformation, witnessRequest));
         assertEquals("Failed to accept connection", ex.getMessage());
         verify(connectionStore).accept(

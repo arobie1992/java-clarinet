@@ -16,7 +16,10 @@ import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
 import com.github.arobie1992.clarinet.reputation.Reputation;
 import com.github.arobie1992.clarinet.reputation.ReputationStore;
-import com.github.arobie1992.clarinet.transport.*;
+import com.github.arobie1992.clarinet.transport.ExchangeHandler;
+import com.github.arobie1992.clarinet.transport.SendHandler;
+import com.github.arobie1992.clarinet.transport.Transport;
+import com.github.arobie1992.clarinet.transport.TransportOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -151,67 +154,65 @@ class SimpleNode implements Node {
 
     @Override
     public ConnectionId connect(PeerId receiver, ConnectionOptions connectionOptions, TransportOptions transportOptions) {
-        var connectionId = connectionStore.create(id(), receiver, Connection.Status.REQUESTING_RECEIVER);
-        var peer = peerStore.find(receiver).orElseThrow(() -> new NoSuchPeerException(receiver));
-        ConnectResponse connectResponse = exchangeForPeer(
-                peer,
-                Endpoints.CONNECT.name(),
-                new ConnectRequest(connectionId, id()),
-                ConnectResponse.class,
-                transportOptions
-        ).findFirst().orElseThrow(ConnectFailureException::new);
-
-        if(connectResponse.rejected()) {
-            throw new ConnectRejectedException(connectResponse.reason());
-        }
-
-        record PeerAndResponse(Peer peer, WitnessResponse witnessResponse) {}
-        Predicate<PeerAndResponse> byRejected = par -> {
-            if(par.witnessResponse.rejected()) {
-                // see about adding a handler here as well
-                log.info("Witness {} rejected due to reason: {}", par.peer.id(), par.witnessResponse.reason());
-                return false;
-            } else {
-                return true;
+        // have to do everything inside the write lock to prevent other threads modifying connection while connect operations are occurring.
+        try(var ref = connectionStore.create(id(), receiver, Connection.Status.REQUESTING_RECEIVER)) {
+            if (!(ref instanceof Writeable(ConnectionImpl connection))) {
+                throw new RuntimeException("Failed to creation connection");
             }
-        };
+            var connectionId = connection.id();
 
-        var witness = trustFilter.apply(reputationStore.findAll(
-                // filter out this node itself and the receiver
-                peerStore.all().filter(pid -> !id.equals(pid) && !receiver.equals(pid)))
-                ).map(peerStore::find)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .map(p -> exchangeForPeer(
-                        p, Endpoints.WITNESS.name(), new WitnessRequest(connectionId, id(), receiver), WitnessResponse.class, transportOptions)
-                        .map(wr -> new PeerAndResponse(p, wr)))
-                .flatMap(r -> r.filter(par -> par.witnessResponse != null))
-                .filter(byRejected)
-                .map(par -> par.peer)
-                .findFirst()
-                .orElseThrow(WitnessSelectionException::new);
+            var peer = peerStore.find(receiver).orElseThrow(() -> new NoSuchPeerException(receiver));
+            ConnectResponse connectResponse = exchangeForPeer(
+                    peer,
+                    Endpoints.CONNECT.name(),
+                    new ConnectRequest(connectionId, id()),
+                    ConnectResponse.class,
+                    transportOptions
+            ).findFirst().orElseThrow(ConnectFailureException::new);
 
-        try(var ref = connectionStore.findForWrite(connectionId)) {
-            if(!(ref instanceof Writeable(ConnectionImpl connection))) {
-                throw new RuntimeException("Connect attempt failed");
+            if(connectResponse.rejected()) {
+                throw new ConnectRejectedException(connectResponse.reason());
             }
+
+            record PeerAndResponse(Peer peer, WitnessResponse witnessResponse) {}
+            Predicate<PeerAndResponse> byRejected = par -> {
+                if(par.witnessResponse.rejected()) {
+                    // see about adding a handler here as well
+                    log.info("Witness {} rejected due to reason: {}", par.peer.id(), par.witnessResponse.reason());
+                    return false;
+                } else {
+                    return true;
+                }
+            };
+
+            var witness = trustFilter.apply(reputationStore.findAll(
+                            // filter out this node itself and the receiver
+                            peerStore.all().filter(pid -> !id.equals(pid) && !receiver.equals(pid)))
+                    ).map(peerStore::find)
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .map(p -> exchangeForPeer(
+                            p,
+                            Endpoints.WITNESS.name(),
+                            new WitnessRequest(connectionId, id(), receiver), WitnessResponse.class, transportOptions
+                    ).map(wr -> new PeerAndResponse(p, wr)))
+                    .flatMap(r -> r.filter(par -> par.witnessResponse != null))
+                    .filter(byRejected)
+                    .map(par -> par.peer)
+                    .findFirst()
+                    .orElseThrow(WitnessSelectionException::new);
+
             connection.setWitness(witness.id());
             connection.setStatus(Connection.Status.NOTIFYING_OF_WITNESS);
-        }
 
-        sendForPeer(peer, Endpoints.WITNESS_NOTIFICATION.name(), new WitnessNotification(connectionId, witness.id()), transportOptions);
-        /*
-         sendForPeer only returns if the send was successful as near as this side can tell, so will only reach this part
-         if it seems successful.
-         */
-        try(var ref = connectionStore.findForWrite(connectionId)) {
-            if(!(ref instanceof Writeable(ConnectionImpl connection))) {
-                throw new NoSuchConnectionException(connectionId);
-            }
+            sendForPeer(peer, Endpoints.WITNESS_NOTIFICATION.name(), new WitnessNotification(connectionId, witness.id()), transportOptions);
+            /*
+             sendForPeer only returns if the send was successful as near as this side can tell, so will only reach this part
+             if it seems successful.
+             */
             connection.setStatus(Connection.Status.OPEN);
+            return connectionId;
         }
-
-        return connectionId;
     }
 
     byte[] genSignature(Object parts) {
