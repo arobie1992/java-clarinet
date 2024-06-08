@@ -4,6 +4,7 @@ import com.github.arobie1992.clarinet.adt.None;
 import com.github.arobie1992.clarinet.transport.RemoteInformation;
 import com.github.arobie1992.clarinet.transport.SendHandler;
 
+import java.util.List;
 import java.util.Objects;
 
 class WitnessNotificationHandlerProxy implements SendHandler<WitnessNotification> {
@@ -28,7 +29,12 @@ class WitnessNotificationHandlerProxy implements SendHandler<WitnessNotification
             switch (ref) {
                 case Writeable(ConnectionImpl conn) -> {
                     if(!Connection.Status.AWAITING_WITNESS.equals(conn.status())) {
-                        throw new UnsupportedOperationException("Connection " + message.connectionId() + " is not awaiting witness.");
+                        throw new ConnectionStatusException(
+                                message.connectionId(),
+                                "setWitness",
+                                conn.status(),
+                                List.of(Connection.Status.AWAITING_WITNESS)
+                        );
                     }
                     conn.setWitness(message.witness());
                     conn.setStatus(Connection.Status.OPEN);
