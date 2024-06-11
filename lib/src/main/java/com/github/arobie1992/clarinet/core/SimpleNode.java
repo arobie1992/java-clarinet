@@ -4,13 +4,10 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
-import com.github.arobie1992.clarinet.crypto.KeyStore;
-import com.github.arobie1992.clarinet.crypto.SigningException;
+import com.github.arobie1992.clarinet.crypto.*;
 import com.github.arobie1992.clarinet.impl.netty.ConnectionIdSerializer;
 import com.github.arobie1992.clarinet.impl.netty.PeerIdSerializer;
-import com.github.arobie1992.clarinet.message.DataMessage;
-import com.github.arobie1992.clarinet.message.MessageId;
-import com.github.arobie1992.clarinet.message.MessageStore;
+import com.github.arobie1992.clarinet.message.*;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
@@ -24,9 +21,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.UncheckedIOException;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -251,6 +248,154 @@ class SimpleNode implements Node {
             sendInternal(connection.witness().orElseThrow(), message, transportOptions);
             return message.messageId();
         }
+    }
+
+    @Override
+    public QueryResult query(PeerId peerId, MessageId messageId, TransportOptions transportOptions) {
+        var peer = peerStore.find(peerId).orElseThrow(() -> new NoSuchPeerException(peerId));
+        var resp = exchangeForPeer(peer, Endpoints.QUERY.name(), new QueryRequest(messageId), QueryResponse.class, transportOptions)
+                .findFirst().orElseThrow(QueryException::new);
+        return new QueryResult(peerId, messageId, resp);
+    }
+
+    @Override
+    public boolean updateReputation(QueryResult queryResult) {
+        var reputation = reputationStore.find(queryResult.queriedPeer());
+        var resp = queryResult.queryResponse();
+        List<PeerId> participants;
+        try(var ref = connectionStore.findForRead(queryResult.queriedMessage().connectionId())) {
+            if (!(ref instanceof Connection.Readable(Connection connection))) {
+                throw new NoSuchConnectionException(queryResult.queriedMessage().connectionId());
+            }
+            participants = List.of(connection.sender(), connection.witness().orElseThrow(), connection.receiver());
+        }
+        var messageOpt = messageStore.find(queryResult.queriedMessage());
+
+        if(invalidSignature(resp, queryResult.queriedPeer())) {
+            reputation.strongPenalize();
+        } else if(!participants.contains(queryResult.queriedPeer())) {
+            return false;
+        } else if(messageOpt.isEmpty()) {
+            return false;
+        } else if(!responseMatches(participants.getFirst(), queryResult.queriedPeer(), messageOpt.get(), queryResult.queryResponse())) {
+            if(directCommunication(queryResult.queriedPeer(), participants)) {
+                reputation.strongPenalize();
+            } else {
+                reputation.weakPenalize();
+                var otherReputation = getOtherParticipantReputation(participants, queryResult.queriedPeer());
+                otherReputation.weakPenalize();
+                reputationStore.save(otherReputation);
+            }
+        } else {
+            reputation.reward();
+        }
+        reputationStore.save(reputation);
+        return true;
+    }
+
+    private boolean invalidSignature(QueryResponse queryResponse, PeerId queriedPeer) {
+        if (queryResponse.signature() == null) {
+            return queryResponse.hash() != null;
+        } else {
+            return !checkSignature(queryResponse.hash(), queriedPeer, queryResponse.signature());
+        }
+    }
+
+    private boolean responseMatches(PeerId sender, PeerId queriedPeer, DataMessage message, QueryResponse queryResponse) {
+        var parts = sender.equals(id()) || sender.equals(queriedPeer) ? message.senderParts() : message.witnessParts();
+        return Arrays.equals(hash(parts, queryResponse.hashAlgorithm()), queryResponse.hash());
+    }
+
+    private Reputation getOtherParticipantReputation(List<PeerId> participants, PeerId queriedPeer) {
+        var other = participants.stream()
+                .filter(id -> !id.equals(id()))
+                .filter(id -> !id.equals(queriedPeer))
+                .toList();
+
+        if(other.size() != 1) {
+            var msg = "There were not exactly three participants in the connection including this node and the queried peer";
+            throw new IllegalStateException(msg);
+        }
+        return reputationStore.find(other.getFirst());
+    }
+
+    private boolean directCommunication(PeerId peerId, List<PeerId> participants) {
+        var selfPos = participants.indexOf(id());
+        if(selfPos == -1) {
+            throw new UnsupportedOperationException("Node's id does not support equality checking or was not a participant in the connection");
+        }
+        var otherPos = participants.indexOf(peerId);
+        if(otherPos == -1) {
+            var msg = "Queried peer's id does not support equality checking or was not a participant in the connection";
+            throw new UnsupportedOperationException(msg);
+        }
+        return Math.abs(selfPos - otherPos) == 1;
+    }
+
+    private byte[] hash(Object data, String algorithm) {
+        try {
+            var enc = objectMapper.writeValueAsBytes(data);
+            var digest = MessageDigest.getInstance(algorithm);
+            return digest.digest(enc);
+        } catch (NoSuchAlgorithmException e) {
+            throw new HashingException(e);
+        } catch (JsonProcessingException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    boolean checkSignature(byte[] data, PeerId peerId, byte[] signature) {
+        var keys = getOrLoadKeys(peerId);
+        return  keys.stream()
+                .map(k -> {
+                    try {
+                        return k.verify(data, signature);
+                    } catch (RuntimeException e) {
+                        log.debug("Encountered error for key {}", k, e);
+                        return false;
+                    }
+                })
+                .filter(v -> v)
+                .findFirst()
+                .orElse(false);
+    }
+
+    @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
+    boolean checkSignature(byte[] data, PeerId peerId, Optional<byte[]> signature) {
+        return signature.map(sig -> checkSignature(data, peerId, sig)).orElse(false);
+    }
+
+    @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
+    boolean checkSignature(Object parts, PeerId peerId, Optional<byte[]> signature) throws JsonProcessingException {
+        var data = objectMapper.writeValueAsBytes(parts);
+        return checkSignature(data, peerId, signature);
+    }
+
+    private Collection<PublicKey> getOrLoadKeys(PeerId peerId) {
+        var keys = keyStore().findPublicKeys(peerId);
+        if(keys.isEmpty()) {
+            keys = requestKeys(peerId, new KeysRequest(), new TransportOptions()).keys()
+                    .stream()
+                    .map(k -> keyStore().providers()
+                            .filter(p -> p instanceof PublicKeyProvider)
+                            .map(p -> (PublicKeyProvider) p)
+                            .filter(p -> p.supports(k.algorithm()))
+                            .map(p -> {
+                                try {
+                                    return p.create(k.bytes());
+                                } catch (RuntimeException e) {
+                                    log.debug("Encountered error creating key for RawKey {}", k.algorithm(), e);
+                                    return null;
+                                }
+                            })
+                            .filter(Objects::nonNull)
+                            .findFirst())
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .toList();
+            keys.forEach(k -> keyStore().addPublicKey(peerId, k));
+        }
+        return keys;
     }
 
     @Override

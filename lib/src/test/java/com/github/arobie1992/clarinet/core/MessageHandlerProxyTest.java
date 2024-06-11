@@ -1,13 +1,6 @@
 package com.github.arobie1992.clarinet.core;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.module.SimpleModule;
-import com.github.arobie1992.clarinet.crypto.KeyStore;
-import com.github.arobie1992.clarinet.crypto.PublicKey;
-import com.github.arobie1992.clarinet.crypto.PublicKeyProvider;
-import com.github.arobie1992.clarinet.crypto.RawKey;
-import com.github.arobie1992.clarinet.impl.netty.ConnectionIdSerializer;
 import com.github.arobie1992.clarinet.message.DataMessage;
 import com.github.arobie1992.clarinet.message.MessageId;
 import com.github.arobie1992.clarinet.message.MessageStore;
@@ -24,8 +17,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
-import java.util.stream.Stream;
 
+import static com.github.arobie1992.clarinet.testutils.ArgumentMatcherUtils.optionalByteArrayEq;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -37,7 +30,6 @@ class MessageHandlerProxyTest {
     );
     private final byte[] senderSignature = {22};
     private final byte[] witnessSignature = {45};
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private DataMessage message;
     private SendHandler<DataMessage> userHandler;
@@ -46,22 +38,10 @@ class MessageHandlerProxyTest {
     private MessageHandlerProxy proxy;
     private ConnectionImpl connection;
     private MessageStore messageStore;
-    private PeerStore peerStore;
-
-    private KeyStore keyStore;
-    private PublicKey senderKey;
-    private PublicKey witnessKey;
-    private PublicKeyProvider provider;
 
     private Reputation senderRep;
     private Reputation witnessRep;
     private ReputationStore reputationStore;
-
-    MessageHandlerProxyTest() {
-        var module = new SimpleModule();
-        module.addSerializer(ConnectionId.class, new ConnectionIdSerializer());
-        objectMapper.registerModule(module);
-    }
 
     @BeforeEach
     void setUp() throws JsonProcessingException {
@@ -87,20 +67,9 @@ class MessageHandlerProxyTest {
         messageStore = mock(MessageStore.class);
         when(node.messageStore()).thenReturn(messageStore);
 
-        peerStore = mock(PeerStore.class);
+        var peerStore = mock(PeerStore.class);
         when(node.peerStore()).thenReturn(peerStore);
         when(peerStore.find(remoteInformation.peer().id())).thenReturn(Optional.empty());
-
-        keyStore = mock(KeyStore.class);
-        when(node.keyStore()).thenReturn(keyStore);
-        senderKey = mock(PublicKey.class);
-        witnessKey = mock(PublicKey.class);
-        when(keyStore.findPublicKeys(connection.sender())).thenReturn(List.of(senderKey));
-        when(keyStore.findPublicKeys(connection.witness().orElseThrow())).thenReturn(List.of(witnessKey));
-        provider = mock(PublicKeyProvider.class);
-        // Have to use an answer because the exact stream instance gets used every time otherwise and throws an already consumed error.
-        when(keyStore.providers()).then(im -> Stream.of(provider));
-        when(provider.supports(any())).thenReturn(true);
 
         reputationStore = mock(ReputationStore.class);
         when(node.reputationStore()).thenReturn(reputationStore);
@@ -109,7 +78,11 @@ class MessageHandlerProxyTest {
         when(reputationStore.find(connection.sender())).thenReturn(senderRep);
         when(reputationStore.find(connection.witness().orElseThrow())).thenReturn(witnessRep);
 
-        when(senderKey.verify(objectMapper.writeValueAsBytes(message.senderParts()), senderSignature)).thenReturn(true);
+        when(node.checkSignature(
+                eq(message.senderParts()),
+                eq(connection.sender()),
+                optionalByteArrayEq(message.senderSignature())
+        )).thenReturn(true);
     }
 
     @Test
@@ -171,38 +144,15 @@ class MessageHandlerProxyTest {
 
     @Test
     void testWitnessSignatureInvalid() throws JsonProcessingException {
-        when(senderKey.verify(objectMapper.writeValueAsBytes(message.senderParts()), senderSignature)).thenReturn(false);
+        when(node.checkSignature(
+                eq(message.senderParts()),
+                eq(connection.sender()),
+                optionalByteArrayEq(message.senderSignature()))
+        ).thenReturn(false);
         proxy.handle(remoteInformation, message);
         assertArrayEquals(witnessSignature, message.witnessSignature().orElseThrow());
         verify(messageStore).add(message);
         verify(senderRep).strongPenalize();
-        verify(reputationStore).save(senderRep);
-        verify(node).sendInternal(connection.receiver(), message, new TransportOptions());
-    }
-
-    @Test
-    void testWitnessRetrievesKeys() throws JsonProcessingException {
-        when(keyStore.findPublicKeys(connection.sender())).thenReturn(List.of());
-
-        var failsCreationRawKey = new RawKey("failing", new byte[]{1});
-        var failsVerifyingRawKey = new RawKey("failing2", new byte[]{2});
-        var successfulRawKey = new RawKey("successful", new byte[]{3});
-        var failingKey = mock(PublicKey.class);
-        var resp = new KeysResponse(List.of(failsCreationRawKey, failsVerifyingRawKey, successfulRawKey));
-
-        when(node.requestKeys(connection.sender(), new KeysRequest(), new TransportOptions())).thenReturn(resp);
-        when(provider.create(failsCreationRawKey.bytes())).thenThrow(RuntimeException.class);
-        when(provider.create(failsVerifyingRawKey.bytes())).thenReturn(failingKey);
-        when(provider.create(successfulRawKey.bytes())).thenReturn(senderKey);
-
-        when(failingKey.verify(objectMapper.writeValueAsBytes(message.senderParts()), message.senderSignature().orElseThrow()))
-                .thenThrow(RuntimeException.class);
-
-        proxy.handle(remoteInformation, message);
-        verify(keyStore).addPublicKey(connection.sender(), senderKey);
-        assertArrayEquals(witnessSignature, message.witnessSignature().orElseThrow());
-        verify(messageStore).add(message);
-        verify(senderRep).reward();
         verify(reputationStore).save(senderRep);
         verify(node).sendInternal(connection.receiver(), message, new TransportOptions());
     }
@@ -218,7 +168,11 @@ class MessageHandlerProxyTest {
     void testReceiverSignaturesValid() throws JsonProcessingException {
         when(node.id()).thenReturn(connection.receiver());
         message.setWitnessSignature(witnessSignature);
-        when(witnessKey.verify(objectMapper.writeValueAsBytes(message.witnessParts()), witnessSignature)).thenReturn(true);
+        when(node.checkSignature(
+                eq(message.witnessParts()),
+                eq(connection.witness().orElseThrow()),
+                optionalByteArrayEq(message.witnessSignature())
+        )).thenReturn(true);
         proxy.handle(remoteInformation, message);
         verify(messageStore).add(message);
         verify(senderRep).reward();
@@ -231,7 +185,7 @@ class MessageHandlerProxyTest {
     void testReceiverWitnessSignatureInvalid() throws JsonProcessingException {
         when(node.id()).thenReturn(connection.receiver());
         message.setWitnessSignature(witnessSignature);
-        when(witnessKey.verify(objectMapper.writeValueAsBytes(message.witnessParts()), witnessSignature)).thenReturn(false);
+        when(node.checkSignature(message.witnessParts(), connection.sender(), message.witnessSignature())).thenReturn(false);
         proxy.handle(remoteInformation, message);
         verify(messageStore).add(message);
         verifyNoInteractions(senderRep);
@@ -243,49 +197,20 @@ class MessageHandlerProxyTest {
     void testReceiverSenderSignatureInvalid() throws JsonProcessingException {
         when(node.id()).thenReturn(connection.receiver());
         message.setWitnessSignature(witnessSignature);
-        when(witnessKey.verify(objectMapper.writeValueAsBytes(message.witnessParts()), witnessSignature)).thenReturn(true);
-        when(senderKey.verify(objectMapper.writeValueAsBytes(message.senderParts()), senderSignature)).thenReturn(false);
+        when(node.checkSignature(
+                eq(message.witnessParts()),
+                eq(connection.witness().orElseThrow()),
+                optionalByteArrayEq(message.witnessSignature())
+        )).thenReturn(true);
+        when(node.checkSignature(
+                eq(message.senderParts()),
+                eq(connection.sender()),
+                optionalByteArrayEq(message.senderSignature())
+        )).thenReturn(false);
         proxy.handle(remoteInformation, message);
         verify(messageStore).add(message);
         verify(senderRep).weakPenalize();
         verify(witnessRep).weakPenalize();
-        verify(reputationStore).save(senderRep);
-        verify(reputationStore).save(witnessRep);
-    }
-
-    @Test
-    void testReceiverRetrievesKeys() throws JsonProcessingException {
-        when(node.id()).thenReturn(connection.receiver());
-        message.setWitnessSignature(witnessSignature);
-        // just use the same keys for both because I'm lazy
-        when(keyStore.findPublicKeys(connection.sender())).thenReturn(List.of());
-        when(keyStore.findPublicKeys(connection.witness().orElseThrow())).thenReturn(List.of());
-
-        var failsCreationRawKey = new RawKey("failing", new byte[]{1});
-        var failsVerifyingRawKey = new RawKey("failing2", new byte[]{2});
-        var successfulSenderRawKey = new RawKey("successful", new byte[]{3});
-        var successfulWitnessRawKey = new RawKey("successful", new byte[]{4});
-        var failingKey = mock(PublicKey.class);
-        var resp = new KeysResponse(List.of(failsCreationRawKey, failsVerifyingRawKey, successfulSenderRawKey));
-        var witResp = new KeysResponse(List.of(failsCreationRawKey, failsVerifyingRawKey, successfulWitnessRawKey));
-
-        when(node.requestKeys(connection.sender(), new KeysRequest(), new TransportOptions())).thenReturn(resp);
-        when(node.requestKeys(connection.witness().orElseThrow(), new KeysRequest(), new TransportOptions())).thenReturn(witResp);
-        when(provider.create(failsCreationRawKey.bytes())).thenThrow(RuntimeException.class);
-        when(provider.create(failsVerifyingRawKey.bytes())).thenReturn(failingKey);
-        when(provider.create(successfulSenderRawKey.bytes())).thenReturn(senderKey);
-        when(provider.create(successfulWitnessRawKey.bytes())).thenReturn(witnessKey);
-
-        when(failingKey.verify(objectMapper.writeValueAsBytes(message.senderParts()), senderSignature)).thenThrow(RuntimeException.class);
-        when(failingKey.verify(objectMapper.writeValueAsBytes(message.witnessParts()), witnessSignature)).thenThrow(RuntimeException.class);
-        when(witnessKey.verify(objectMapper.writeValueAsBytes(message.witnessParts()), witnessSignature)).thenReturn(true);
-
-        proxy.handle(remoteInformation, message);
-        verify(keyStore).addPublicKey(connection.sender(), senderKey);
-        verify(keyStore).addPublicKey(connection.witness().orElseThrow(), witnessKey);
-        verify(messageStore).add(message);
-        verify(senderRep).reward();
-        verify(witnessRep).reward();
         verify(reputationStore).save(senderRep);
         verify(reputationStore).save(witnessRep);
     }

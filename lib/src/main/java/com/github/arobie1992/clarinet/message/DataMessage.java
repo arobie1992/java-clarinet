@@ -53,8 +53,28 @@ public class DataMessage {
         return Optional.of(Arrays.copyOf(witnessSignature, witnessSignature.length));
     }
 
-    public record SenderParts(MessageId messageId, byte[] data) {}
-    public record WitnessParts(MessageId messageId, byte[] data, byte[] senderSignature) {}
+    public record SenderParts(MessageId messageId, byte[] data) {
+        // just piggyback on record's hashCode
+        // we only need to do this because stupid array equality behavior
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            SenderParts that = (SenderParts) o;
+            return Objects.deepEquals(data, that.data) && Objects.equals(messageId, that.messageId);
+        }
+    }
+    public record WitnessParts(MessageId messageId, byte[] data, byte[] senderSignature) {
+        // just piggyback on record's hashCode
+        // we only need to do this because stupid array equality behavior
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            WitnessParts that = (WitnessParts) o;
+            return Objects.deepEquals(data, that.data) && Objects.equals(messageId, that.messageId) && Objects.deepEquals(senderSignature, that.senderSignature);
+        }
+    }
 
     @Override
     public boolean equals(Object o) {

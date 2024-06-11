@@ -2,6 +2,7 @@ package com.github.arobie1992.clarinet.message;
 
 import com.github.arobie1992.clarinet.core.ConnectionId;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -153,6 +154,7 @@ class DataMessageTest {
     @Test
     void testEqualsNull() {
         // the point is to test what happens when null is passed and using assertNotNull was not exercising the equals method.
+        //noinspection ConstantValue
         assertFalse(message.equals(null));
     }
 
@@ -204,5 +206,186 @@ class DataMessageTest {
         message.senderSignature().ifPresent(copy::setSenderSignature);
         message.witnessSignature().ifPresent(copy::setWitnessSignature);
         return copy;
+    }
+
+    @Nested
+    class SenderPartsTest {
+        @Test
+        void testEqualsReflexive() {
+            var a = message.senderParts();
+            //noinspection EqualsWithItself
+            assertEquals(a, a);
+
+        }
+
+        @Test
+        void testEqualsSymmetric() {
+            var a = message.senderParts();
+            var b = message.senderParts();
+            assertNotSame(a, b);
+            assertEquals(a, b);
+            assertEquals(b, a);
+        }
+
+        @Test
+        void testEqualsTransitive() {
+            var a = message.senderParts();
+            var b = message.senderParts();
+            var c = message.senderParts();
+            assertNotSame(a, b);
+            assertEquals(a, b);
+            assertNotSame(b, c);
+            assertEquals(b, c);
+            assertNotSame(a, c);
+            assertEquals(a, c);
+        }
+
+        @Test
+        void testEqualsConsistent() {
+            var a = message.senderParts();
+            var b = message.senderParts();
+            assertNotSame(a, b);
+            assertEquals(a, b);
+            assertEquals(a, b);
+            assertEquals(a, b);
+        }
+
+        @Test
+        void testEqualsNull() {
+            // noinspection SimplifiableAssertion, ConstantValue
+            assertFalse(message.senderParts().equals(null));
+        }
+
+        @Test
+        void testEqualsMessageIdNotMatching() {
+            var a = message.senderParts();
+            var messageId = new MessageId(ConnectionId.random(), 0);
+            assertNotEquals(a.messageId(), messageId);
+            var notEqual = new DataMessage.SenderParts(messageId, data);
+            assertNotEquals(a, notEqual);
+        }
+
+        @Test
+        void testEqualsDataMatching() {
+            var a = message.senderParts();
+            var b = message.senderParts();
+            assertNotSame(a.data(), b.data());
+            assertNotEquals(a.data(), b.data());
+            assertArrayEquals(a.data(), b.data());
+            assertEquals(a, b);
+        }
+
+        @Test
+        void testEqualsDataNotMatching() {
+            var a = message.senderParts();
+            var data = new byte[]{99};
+            assertNotEquals(a.data(), data);
+            var notEqual = new DataMessage.SenderParts(messageId, data);
+            assertNotEquals(a, notEqual);
+        }
+
+        @Test
+        void testEqualsDifferentClass() {
+            assertNotEquals(message.senderParts(), new Object());
+        }
+    }
+
+    @Nested
+    class WitnessPartsTest {
+        @Test
+        void testEqualsReflexive() {
+            var a = message.witnessParts();
+            //noinspection EqualsWithItself
+            assertEquals(a, a);
+
+        }
+
+        @Test
+        void testEqualsSymmetric() {
+            var a = message.witnessParts();
+            var b = message.witnessParts();
+            assertNotSame(a, b);
+            assertEquals(a, b);
+            assertEquals(b, a);
+        }
+
+        @Test
+        void testEqualsTransitive() {
+            var a = message.witnessParts();
+            var b = message.witnessParts();
+            var c = message.witnessParts();
+            assertNotSame(a, b);
+            assertEquals(a, b);
+            assertNotSame(b, c);
+            assertEquals(b, c);
+            assertNotSame(a, c);
+            assertEquals(a, c);
+        }
+
+        @Test
+        void testEqualsConsistent() {
+            var a = message.witnessParts();
+            var b = message.witnessParts();
+            assertNotSame(a, b);
+            assertEquals(a, b);
+            assertEquals(a, b);
+            assertEquals(a, b);
+        }
+
+        @Test
+        void testEqualsNull() {
+            // noinspection SimplifiableAssertion, ConstantValue
+            assertFalse(message.witnessParts().equals(null));
+        }
+
+        @Test
+        void testEqualsMessageIdNotMatching() {
+            var a = message.witnessParts();
+            var messageId = new MessageId(ConnectionId.random(), 0);
+            assertNotEquals(a.messageId(), messageId);
+            var notEqual = new DataMessage.WitnessParts(messageId, data, null);
+            assertNotEquals(a, notEqual);
+        }
+
+        @Test
+        void testEqualsDataMatching() {
+            var a = message.witnessParts();
+            var b = message.witnessParts();
+            assertNotSame(a.data(), b.data());
+            assertNotEquals(a.data(), b.data());
+            assertArrayEquals(a.data(), b.data());
+            assertEquals(a, b);
+        }
+
+        @Test
+        void testEqualsDataNotMatching() {
+            var a = message.witnessParts();
+            var data = new byte[]{99};
+            assertNotEquals(a.data(), data);
+            var notEqual = new DataMessage.WitnessParts(messageId, data, null);
+            assertNotEquals(a, notEqual);
+        }
+
+        @Test
+        void testEqualsSenderSigMatching() {
+            var a = new DataMessage.WitnessParts(messageId, data, new byte[]{17});
+            var b = new DataMessage.WitnessParts(messageId, data, new byte[]{17});
+            assertNotSame(a.senderSignature(), b.senderSignature());
+            assertNotEquals(a.senderSignature(), b.senderSignature());
+            assertArrayEquals(a.senderSignature(), b.senderSignature());
+            assertEquals(a, b);
+        }
+
+        @Test
+        void testEqualsSenderSigNotMatching() {
+            var a = new DataMessage.WitnessParts(messageId, data, new byte[]{17});
+            var b = new DataMessage.WitnessParts(messageId, data, new byte[]{18});
+            assertNotEquals(a, b);
+        }
+
+        @Test
+        void testEqualsDifferentClass() {
+            assertNotEquals(message.witnessParts(), new Object());
+        }
     }
 }

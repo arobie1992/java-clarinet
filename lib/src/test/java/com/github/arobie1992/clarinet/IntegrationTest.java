@@ -30,6 +30,7 @@ import com.github.arobie1992.clarinet.testutils.TransportUtils;
 import com.github.arobie1992.clarinet.transport.ExchangeHandler;
 import com.github.arobie1992.clarinet.transport.RemoteInformation;
 import com.github.arobie1992.clarinet.transport.SendHandler;
+import com.github.arobie1992.clarinet.transport.TransportOptions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -184,14 +185,39 @@ class IntegrationTest {
         verifyReputation(receiver, sender.id(), 1);
         verifyReputation(receiver, witness.id(), 1);
 
-        fail("Test reputation, and querying");
-
         // sender querying message
+        var resp = sender.query(witness.id(), messageId, new TransportOptions());
+        sender.updateReputation(resp);
+        verifyReputation(sender, witness.id(), 1);
+        resp = sender.query(receiver.id(), messageId, new TransportOptions());
+        sender.updateReputation(resp);
+        verifyReputation(sender, receiver.id(), 1);
 
         // witness querying message
+        resp = witness.query(sender.id(), messageId, new TransportOptions());
+        witness.updateReputation(resp);
+        verifyReputation(witness, sender.id(), 1);
+        resp = witness.query(receiver.id(), messageId, new TransportOptions());
+        witness.updateReputation(resp);
+        verifyReputation(witness, receiver.id(), 1);
 
         // receiver querying message
+        resp = receiver.query(sender.id(), messageId, new TransportOptions());
+        receiver.updateReputation(resp);
+        verifyReputation(receiver, sender.id(), 1);
+        resp = receiver.query(witness.id(), messageId, new TransportOptions());
+        receiver.updateReputation(resp);
+        verifyReputation(receiver, witness.id(), 1);
+
+        fail("closing connection");
     }
+
+    /*
+     TODO items
+     - receiver forwarding message to sender during send
+     - forwarding query
+     - allowing configuration in which side picks the witness
+     */
 
     @Disabled
     @Test

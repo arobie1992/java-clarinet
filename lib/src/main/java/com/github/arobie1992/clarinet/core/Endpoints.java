@@ -6,7 +6,8 @@ public enum Endpoints {
     WITNESS_NOTIFICATION,
     MESSAGE,
     REQUEST_PEERS,
-    REQUEST_KEYS;
+    REQUEST_KEYS,
+    QUERY;
 
     static boolean isEndpoint(String endpoint) {
         for (Endpoints e : Endpoints.values()) {
