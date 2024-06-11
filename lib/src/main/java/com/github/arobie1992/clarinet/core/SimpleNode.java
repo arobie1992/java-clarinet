@@ -60,6 +60,7 @@ class SimpleNode implements Node {
         this.transport.addInternal(Endpoints.MESSAGE.name(), new MessageHandlerProxy(builder.messageHandler, connectionStore, this));
         this.transport.addInternal(Endpoints.REQUEST_PEERS.name(), new PeersRequestHandlerProxy(builder.peersRequestHandler, this));
         this.transport.addInternal(Endpoints.REQUEST_KEYS.name(), new KeysRequestHandlerProxy(builder.keysRequestHandler, this));
+        this.transport.addInternal(Endpoints.QUERY.name(), new QueryHandlerProxy(builder.queryHandler, connectionStore, this));
 
         this.trustFilter = Objects.requireNonNull(builder.trustFilter, "trustFilter");
         this.reputationStore = Objects.requireNonNull(builder.reputationStore, "reputationStore");
@@ -219,11 +220,13 @@ class SimpleNode implements Node {
         } catch (JsonProcessingException e) {
             throw new UncheckedIOException(e);
         }
-        // java closure rules :\
-        final byte[] finalSerialized = serialized;
+        return genSignature(serialized);
+    }
+
+    byte[] genSignature(final byte[] data) {
         return keyStore.findPrivateKeys(id).stream().map(k -> {
             try {
-                return k.sign(finalSerialized);
+                return k.sign(data);
             } catch(SigningException e) {
                 log.info("Encountered error while attempting to sign", e);
                 // TODO error handler here too
@@ -332,7 +335,7 @@ class SimpleNode implements Node {
         return Math.abs(selfPos - otherPos) == 1;
     }
 
-    private byte[] hash(Object data, String algorithm) {
+    byte[] hash(Object data, String algorithm) {
         try {
             var enc = objectMapper.writeValueAsBytes(data);
             var digest = MessageDigest.getInstance(algorithm);
@@ -480,6 +483,16 @@ class SimpleNode implements Node {
         this.transport.addInternal(Endpoints.REQUEST_KEYS.name(), new KeysRequestHandlerProxy(null, this));
     }
 
+    @Override
+    public void addQueryHandler(ExchangeHandler<QueryRequest, QueryResponse> queryHandler) {
+        this.transport.addInternal(Endpoints.QUERY.name(), new QueryHandlerProxy(queryHandler, connectionStore, this));
+    }
+
+    @Override
+    public void removeQueryHandler() {
+        this.transport.addInternal(Endpoints.QUERY.name(), new QueryHandlerProxy(null, connectionStore, this));
+    }
+
     static class Builder implements NodeBuilder {
         private PeerId id;
         private PeerStore peerStore;
@@ -494,6 +507,7 @@ class SimpleNode implements Node {
         private SendHandler<DataMessage> messageHandler;
         private ExchangeHandler<PeersRequest, PeersResponse> peersRequestHandler;
         private ExchangeHandler<KeysRequest, KeysResponse> keysRequestHandler;
+        private ExchangeHandler<QueryRequest, QueryResponse> queryHandler;
 
         @Override
         public NodeBuilder id(PeerId id) {
@@ -570,6 +584,12 @@ class SimpleNode implements Node {
         @Override
         public NodeBuilder keysRequestHandler(ExchangeHandler<KeysRequest, KeysResponse> keysRequestHandler) {
             this.keysRequestHandler = keysRequestHandler;
+            return this;
+        }
+
+        @Override
+        public NodeBuilder queryHandler(ExchangeHandler<QueryRequest, QueryResponse> queryHandler) {
+            this.queryHandler = queryHandler;
             return this;
         }
 

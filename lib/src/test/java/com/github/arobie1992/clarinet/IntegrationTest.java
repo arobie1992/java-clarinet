@@ -98,6 +98,7 @@ class IntegrationTest {
                 .keyStore(new InMemoryKeyStore())
                 .build();
         receiver.transport().add(new UriAddress(new URI("tcp://localhost:0")));
+        receiver.keyStore().addKeyPair(receiver.id(), Keys.generateKeyPair());
         receiver.keyStore().addProvider(KeyProviders.javaSignatureSha256RsaPublicKeyProvider());
 
         witnessNotificationLatch = new CountDownLatch(1);
@@ -209,7 +210,7 @@ class IntegrationTest {
         receiver.updateReputation(resp);
         verifyReputation(receiver, witness.id(), 1);
 
-        fail("closing connection");
+        fail("Test closing connection");
     }
 
     /*

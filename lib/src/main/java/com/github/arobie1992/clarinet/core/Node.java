@@ -1,10 +1,7 @@
 package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.crypto.KeyStore;
-import com.github.arobie1992.clarinet.message.DataMessage;
-import com.github.arobie1992.clarinet.message.MessageId;
-import com.github.arobie1992.clarinet.message.MessageStore;
-import com.github.arobie1992.clarinet.message.QueryResult;
+import com.github.arobie1992.clarinet.message.*;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
 import com.github.arobie1992.clarinet.reputation.ReputationStore;
@@ -115,4 +112,8 @@ public interface Node {
     void addKeysRequestHandler(ExchangeHandler<KeysRequest, KeysResponse> keysRequestHandler);
 
     void removeKeysRequestHandler();
+
+    void addQueryHandler(ExchangeHandler<QueryRequest, QueryResponse> queryHandler);
+
+    void removeQueryHandler();
 }

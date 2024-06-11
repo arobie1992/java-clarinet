@@ -3,6 +3,8 @@ package com.github.arobie1992.clarinet.core;
 import com.github.arobie1992.clarinet.crypto.KeyStore;
 import com.github.arobie1992.clarinet.message.DataMessage;
 import com.github.arobie1992.clarinet.message.MessageStore;
+import com.github.arobie1992.clarinet.message.QueryRequest;
+import com.github.arobie1992.clarinet.message.QueryResponse;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
 import com.github.arobie1992.clarinet.reputation.Reputation;
@@ -99,6 +101,17 @@ public interface NodeBuilder {
      * @return {@code this} builder for fluent building.
      */
     NodeBuilder keysRequestHandler(ExchangeHandler<KeysRequest, KeysResponse> keysRequestHandler);
+
+    /**
+     * User behavior for how to respond to a {@link QueryRequest}.
+     * <p>
+     * No provided handler means the system should construct the response to the best of its ability. Providing a
+     * handler means that the system will return the user-provided response exactly as is.
+     *
+     * @param queryHandler The handler implementing the user-desired behavior.
+     * @return {@code this} builder for fluent building.
+     */
+    NodeBuilder queryHandler(ExchangeHandler<QueryRequest, QueryResponse> queryHandler);
 
     Node build();
 }
