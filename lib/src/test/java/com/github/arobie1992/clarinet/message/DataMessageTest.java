@@ -211,20 +211,22 @@ class DataMessageTest {
     @Nested
     class SenderPartsTest {
         @Test
-        void testEqualsReflexive() {
+        void testEqualsAndHashCodeReflexive() {
             var a = message.senderParts();
             //noinspection EqualsWithItself
             assertEquals(a, a);
-
+            assertEquals(a.hashCode(), a.hashCode());
         }
 
         @Test
-        void testEqualsSymmetric() {
+        void testEqualsAndHashCodeSymmetric() {
             var a = message.senderParts();
             var b = message.senderParts();
             assertNotSame(a, b);
             assertEquals(a, b);
+            assertEquals(a.hashCode(), b.hashCode());
             assertEquals(b, a);
+            assertEquals(b.hashCode(), a.hashCode());
         }
 
         @Test
@@ -234,10 +236,15 @@ class DataMessageTest {
             var c = message.senderParts();
             assertNotSame(a, b);
             assertEquals(a, b);
+            assertEquals(a.hashCode(), b.hashCode());
+
             assertNotSame(b, c);
             assertEquals(b, c);
+            assertEquals(b.hashCode(), c.hashCode());
+
             assertNotSame(a, c);
             assertEquals(a, c);
+            assertEquals(a.hashCode(), c.hashCode());
         }
 
         @Test
@@ -246,8 +253,11 @@ class DataMessageTest {
             var b = message.senderParts();
             assertNotSame(a, b);
             assertEquals(a, b);
+            assertEquals(a.hashCode(), b.hashCode());
             assertEquals(a, b);
+            assertEquals(a.hashCode(), b.hashCode());
             assertEquals(a, b);
+            assertEquals(a.hashCode(), b.hashCode());
         }
 
         @Test
@@ -263,50 +273,58 @@ class DataMessageTest {
             assertNotEquals(a.messageId(), messageId);
             var notEqual = new DataMessage.SenderParts(messageId, data);
             assertNotEquals(a, notEqual);
+            assertNotEquals(a.hashCode(), notEqual.hashCode());
         }
 
         @Test
-        void testEqualsDataMatching() {
+        void testEqualsAndHashCodeDataMatching() {
             var a = message.senderParts();
             var b = message.senderParts();
             assertNotSame(a.data(), b.data());
             assertNotEquals(a.data(), b.data());
             assertArrayEquals(a.data(), b.data());
             assertEquals(a, b);
+            assertEquals(a.hashCode(), b.hashCode());
         }
 
         @Test
-        void testEqualsDataNotMatching() {
+        void testEqualsAndHashCodeDataNotMatching() {
             var a = message.senderParts();
             var data = new byte[]{99};
             assertNotEquals(a.data(), data);
             var notEqual = new DataMessage.SenderParts(messageId, data);
             assertNotEquals(a, notEqual);
+            assertNotEquals(a.hashCode(), notEqual.hashCode());
         }
 
         @Test
-        void testEqualsDifferentClass() {
-            assertNotEquals(message.senderParts(), new Object());
+        void testEqualsAndHashCodeDifferentClass() {
+            var a = message.senderParts();
+            var b = new Object();
+            assertNotEquals(a, b);
+            assertNotEquals(a.hashCode(), b.hashCode());
         }
     }
 
     @Nested
     class WitnessPartsTest {
         @Test
-        void testEqualsReflexive() {
+        void testEqualsAndHashCodeReflexive() {
             var a = message.witnessParts();
             //noinspection EqualsWithItself
             assertEquals(a, a);
-
+            assertEquals(a.hashCode(), a.hashCode());
         }
 
         @Test
-        void testEqualsSymmetric() {
+        void testEqualsAndHashCodeSymmetric() {
             var a = message.witnessParts();
             var b = message.witnessParts();
             assertNotSame(a, b);
             assertEquals(a, b);
+            assertEquals(a.hashCode(), b.hashCode());
             assertEquals(b, a);
+            assertEquals(b.hashCode(), a.hashCode());
         }
 
         @Test
@@ -316,20 +334,28 @@ class DataMessageTest {
             var c = message.witnessParts();
             assertNotSame(a, b);
             assertEquals(a, b);
+            assertEquals(a.hashCode(), b.hashCode());
+
             assertNotSame(b, c);
             assertEquals(b, c);
+            assertEquals(b.hashCode(), c.hashCode());
+
             assertNotSame(a, c);
             assertEquals(a, c);
+            assertEquals(a.hashCode(), c.hashCode());
         }
 
         @Test
-        void testEqualsConsistent() {
+        void testEqualsAndHashCodeConsistent() {
             var a = message.witnessParts();
             var b = message.witnessParts();
             assertNotSame(a, b);
             assertEquals(a, b);
+            assertEquals(a.hashCode(), b.hashCode());
             assertEquals(a, b);
+            assertEquals(a.hashCode(), b.hashCode());
             assertEquals(a, b);
+            assertEquals(a.hashCode(), b.hashCode());
         }
 
         @Test
@@ -339,22 +365,24 @@ class DataMessageTest {
         }
 
         @Test
-        void testEqualsMessageIdNotMatching() {
+        void testEqualsAndHashCodeMessageIdNotMatching() {
             var a = message.witnessParts();
             var messageId = new MessageId(ConnectionId.random(), 0);
             assertNotEquals(a.messageId(), messageId);
             var notEqual = new DataMessage.WitnessParts(messageId, data, null);
             assertNotEquals(a, notEqual);
+            assertNotEquals(a.hashCode(), messageId.hashCode());
         }
 
         @Test
-        void testEqualsDataMatching() {
+        void testEqualsAndHashCodeDataMatching() {
             var a = message.witnessParts();
             var b = message.witnessParts();
             assertNotSame(a.data(), b.data());
             assertNotEquals(a.data(), b.data());
             assertArrayEquals(a.data(), b.data());
             assertEquals(a, b);
+            assertEquals(a.hashCode(), b.hashCode());
         }
 
         @Test
@@ -364,28 +392,34 @@ class DataMessageTest {
             assertNotEquals(a.data(), data);
             var notEqual = new DataMessage.WitnessParts(messageId, data, null);
             assertNotEquals(a, notEqual);
+            assertNotEquals(a.hashCode(), messageId.hashCode());
         }
 
         @Test
-        void testEqualsSenderSigMatching() {
+        void testEqualsAndHashCodeSenderSigMatching() {
             var a = new DataMessage.WitnessParts(messageId, data, new byte[]{17});
             var b = new DataMessage.WitnessParts(messageId, data, new byte[]{17});
             assertNotSame(a.senderSignature(), b.senderSignature());
             assertNotEquals(a.senderSignature(), b.senderSignature());
             assertArrayEquals(a.senderSignature(), b.senderSignature());
             assertEquals(a, b);
+            assertEquals(a.hashCode(), b.hashCode());
         }
 
         @Test
-        void testEqualsSenderSigNotMatching() {
+        void testEqualsAndHashCodeSenderSigNotMatching() {
             var a = new DataMessage.WitnessParts(messageId, data, new byte[]{17});
             var b = new DataMessage.WitnessParts(messageId, data, new byte[]{18});
             assertNotEquals(a, b);
+            assertNotEquals(a.hashCode(), b.hashCode());
         }
 
         @Test
-        void testEqualsDifferentClass() {
-            assertNotEquals(message.witnessParts(), new Object());
+        void testEqualsAndHashCodeDifferentClass() {
+            var a = message.witnessParts();
+            var other = new Object();
+            assertNotEquals(a, other);
+            assertNotEquals(a.hashCode(), other.hashCode());
         }
     }
 }

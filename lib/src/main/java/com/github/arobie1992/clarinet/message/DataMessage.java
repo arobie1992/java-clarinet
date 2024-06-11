@@ -54,8 +54,7 @@ public class DataMessage {
     }
 
     public record SenderParts(MessageId messageId, byte[] data) {
-        // just piggyback on record's hashCode
-        // we only need to do this because stupid array equality behavior
+        // https://stackoverflow.com/questions/61261226/java-14-records-and-arrays
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
@@ -63,16 +62,23 @@ public class DataMessage {
             SenderParts that = (SenderParts) o;
             return Objects.deepEquals(data, that.data) && Objects.equals(messageId, that.messageId);
         }
+        @Override
+        public int hashCode() {
+            return Objects.hash(messageId, Arrays.hashCode(data));
+        }
     }
     public record WitnessParts(MessageId messageId, byte[] data, byte[] senderSignature) {
-        // just piggyback on record's hashCode
-        // we only need to do this because stupid array equality behavior
+        // https://stackoverflow.com/questions/61261226/java-14-records-and-arrays
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             WitnessParts that = (WitnessParts) o;
             return Objects.deepEquals(data, that.data) && Objects.equals(messageId, that.messageId) && Objects.deepEquals(senderSignature, that.senderSignature);
+        }
+        @Override
+        public int hashCode() {
+            return Objects.hash(messageId, Arrays.hashCode(data), Arrays.hashCode(senderSignature));
         }
     }
 
