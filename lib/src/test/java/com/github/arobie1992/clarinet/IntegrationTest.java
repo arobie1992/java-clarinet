@@ -109,21 +109,19 @@ class IntegrationTest {
         receiverCloseLatch = new CountDownLatch(1);
     }
 
+    record SendLatchHandler<T>(CountDownLatch latch, Class<T> inputType) implements SendHandler<T> {
+        @Override
+        public None<Void> handle(RemoteInformation remoteInformation, T message) {
+            latch.countDown();
+            return new None<>();
+        }
+    }
+
     @Test
     void testCooperative() throws InterruptedException, JsonProcessingException {
         sender.peerStore().save(asPeer(receiver));
         sender.peerStore().save(asPeer(witness));
-        receiver.addWitnessNotificationHandler(new SendHandler<>() {
-            @Override
-            public None<Void> handle(RemoteInformation remoteInformation, WitnessNotification message) {
-                witnessNotificationLatch.countDown();
-                return null;
-            }
-            @Override
-            public Class<WitnessNotification> inputType() {
-                return WitnessNotification.class;
-            }
-        });
+        receiver.addWitnessNotificationHandler(new SendLatchHandler<>(witnessNotificationLatch, WitnessNotification.class));
 
         witness.addWitnessRequestHandler(new ExchangeHandler<>() {
             @Override
@@ -151,17 +149,7 @@ class IntegrationTest {
             }
         });
 
-        receiver.addMessageHandler(new SendHandler<>() {
-            @Override
-            public None<Void> handle(RemoteInformation remoteInformation, DataMessage message) {
-                messageLatch.countDown();
-                return null;
-            }
-            @Override
-            public Class<DataMessage> inputType() {
-                return DataMessage.class;
-            }
-        });
+        receiver.addMessageHandler(new SendLatchHandler<>(messageLatch, DataMessage.class));
 
         // connection creation
         var connectionId = sender.connect(receiver.id(), new ConnectionOptions(), TransportUtils.defaultOptions());
@@ -214,9 +202,12 @@ class IntegrationTest {
         receiver.updateReputation(resp);
         verifyReputation(receiver, witness.id(), 1);
 
+        witness.addCloseHandler(new SendLatchHandler<>(witnessCloseLatch, CloseRequest.class));
+        receiver.addCloseHandler(new SendLatchHandler<>(receiverCloseLatch, CloseRequest.class));
+
         sender.close(connectionId, new CloseOptions(), new TransportOptions());
-//        witnessCloseLatch.await();
-//        receiverCloseLatch.await();
+        assertTrue(witnessCloseLatch.await(5, TimeUnit.SECONDS));
+        assertTrue(receiverCloseLatch.await(5, TimeUnit.SECONDS));
         var closedConn = new TestConnection(connectionId, sender.id(), Optional.of(witness.id()), receiver.id(), Connection.Status.CLOSED);
         verifyConnectionPresent(closedConn, sender);
         verifyConnectionPresent(closedConn, witness);
@@ -225,7 +216,7 @@ class IntegrationTest {
 
     /*
      TODO items
-     - receiver forwarding message to sender during send
+     - receiver forwarding message to sender during send when sender signature is invalid
      - forwarding query
      - allowing configuration in which side picks the witness
      */

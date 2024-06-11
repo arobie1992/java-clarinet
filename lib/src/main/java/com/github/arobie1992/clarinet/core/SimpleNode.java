@@ -62,6 +62,7 @@ class SimpleNode implements Node {
         this.transport.addInternal(Endpoints.REQUEST_PEERS.name(), new PeersRequestHandlerProxy(builder.peersRequestHandler, this));
         this.transport.addInternal(Endpoints.REQUEST_KEYS.name(), new KeysRequestHandlerProxy(builder.keysRequestHandler, this));
         this.transport.addInternal(Endpoints.QUERY.name(), new QueryHandlerProxy(builder.queryHandler, connectionStore, this));
+        this.transport.addInternal(Endpoints.CLOSE.name(), new CloseHandlerProxy(builder.closeHandler, connectionStore));
 
         this.trustFilter = Objects.requireNonNull(builder.trustFilter, "trustFilter");
         this.reputationStore = Objects.requireNonNull(builder.reputationStore, "reputationStore");
@@ -277,6 +278,7 @@ class SimpleNode implements Node {
                             log.warn("Encountered error while attempting to send close of connection {} to {}", connectionId, p, e);
                         }
                     });
+            connection.setStatus(Connection.Status.CLOSED);
         }
     }
 
@@ -288,6 +290,7 @@ class SimpleNode implements Node {
         return new QueryResult(peerId, messageId, resp);
     }
 
+    // TODO change this to processQueryResult or something else that would allow for query forwarding
     @Override
     public boolean updateReputation(QueryResult queryResult) {
         var reputation = reputationStore.find(queryResult.queriedPeer());
@@ -520,6 +523,16 @@ class SimpleNode implements Node {
         this.transport.addInternal(Endpoints.QUERY.name(), new QueryHandlerProxy(null, connectionStore, this));
     }
 
+    @Override
+    public void addCloseHandler(SendHandler<CloseRequest> closeHandler) {
+        this.transport.addInternal(Endpoints.CLOSE.name(), new CloseHandlerProxy(closeHandler, connectionStore));
+    }
+
+    @Override
+    public void removeCloseHandler() {
+        this.transport.addInternal(Endpoints.CLOSE.name(), new CloseHandlerProxy(null, connectionStore));
+    }
+
     static class Builder implements NodeBuilder {
         private PeerId id;
         private PeerStore peerStore;
@@ -535,6 +548,7 @@ class SimpleNode implements Node {
         private ExchangeHandler<PeersRequest, PeersResponse> peersRequestHandler;
         private ExchangeHandler<KeysRequest, KeysResponse> keysRequestHandler;
         private ExchangeHandler<QueryRequest, QueryResponse> queryHandler;
+        private SendHandler<CloseRequest> closeHandler;
 
         @Override
         public NodeBuilder id(PeerId id) {
@@ -617,6 +631,12 @@ class SimpleNode implements Node {
         @Override
         public NodeBuilder queryHandler(ExchangeHandler<QueryRequest, QueryResponse> queryHandler) {
             this.queryHandler = queryHandler;
+            return this;
+        }
+
+        @Override
+        public NodeBuilder closeHandler(SendHandler<CloseRequest> closeHandler) {
+            this.closeHandler = closeHandler;
             return this;
         }
 

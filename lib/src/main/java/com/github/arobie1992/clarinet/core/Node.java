@@ -118,4 +118,8 @@ public interface Node {
     void addQueryHandler(ExchangeHandler<QueryRequest, QueryResponse> queryHandler);
 
     void removeQueryHandler();
+
+    void addCloseHandler(SendHandler<CloseRequest> closeHandler);
+
+    void removeCloseHandler();
 }

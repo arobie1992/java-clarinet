@@ -113,5 +113,14 @@ public interface NodeBuilder {
      */
     NodeBuilder queryHandler(ExchangeHandler<QueryRequest, QueryResponse> queryHandler);
 
+    /**
+     * User-defined behavior for dealing with close requests.
+     * <p>
+     * Users do not need to update the connection themselves.
+     * @param closeHandler The handler implementing the user-desired behavior.
+     * @return {@code this} builder for fluent building.
+     */
+    NodeBuilder closeHandler(SendHandler<CloseRequest> closeHandler);
+
     Node build();
 }
