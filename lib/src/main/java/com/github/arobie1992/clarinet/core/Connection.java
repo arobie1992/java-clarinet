@@ -2,6 +2,7 @@ package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.peer.PeerId;
 
+import java.util.List;
 import java.util.Optional;
 
 public sealed interface Connection permits ConnectionImpl {
@@ -12,6 +13,8 @@ public sealed interface Connection permits ConnectionImpl {
     Connection.Status status();
 
     long nextSequenceNumber();
+
+    List<PeerId> participants();
 
     /**
      * {@code Reference} allows access to a {@link Connection} and performs any necessary unlocking in its

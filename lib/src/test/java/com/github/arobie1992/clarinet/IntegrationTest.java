@@ -54,6 +54,8 @@ class IntegrationTest {
     private Node sender, witness, receiver;
     private CountDownLatch witnessNotificationLatch;
     private CountDownLatch messageLatch;
+    private CountDownLatch witnessCloseLatch;
+    private CountDownLatch receiverCloseLatch;
 
     IntegrationTest() {
         var module = new SimpleModule();
@@ -103,6 +105,8 @@ class IntegrationTest {
 
         witnessNotificationLatch = new CountDownLatch(1);
         messageLatch = new CountDownLatch(1);
+        witnessCloseLatch = new CountDownLatch(1);
+        receiverCloseLatch = new CountDownLatch(1);
     }
 
     @Test
@@ -210,7 +214,13 @@ class IntegrationTest {
         receiver.updateReputation(resp);
         verifyReputation(receiver, witness.id(), 1);
 
-        fail("Test closing connection");
+        sender.close(connectionId, new CloseOptions(), new TransportOptions());
+//        witnessCloseLatch.await();
+//        receiverCloseLatch.await();
+        var closedConn = new TestConnection(connectionId, sender.id(), Optional.of(witness.id()), receiver.id(), Connection.Status.CLOSED);
+        verifyConnectionPresent(closedConn, sender);
+        verifyConnectionPresent(closedConn, witness);
+        verifyConnectionPresent(closedConn, receiver);
     }
 
     /*

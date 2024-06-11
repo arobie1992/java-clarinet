@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import java.io.UncheckedIOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -254,6 +255,32 @@ class SimpleNode implements Node {
     }
 
     @Override
+    public void close(ConnectionId connectionId, CloseOptions closeOptions, TransportOptions transportOptions) {
+        try(var ref = connectionStore.findForWrite(connectionId, closeOptions.connectionObtainTimeout().orElse(Duration.ofSeconds(10)))) {
+            if(!(ref instanceof Writeable(ConnectionImpl connection))) {
+                throw new NoSuchConnectionException(connectionId);
+            }
+            if(connection.status().equals(Connection.Status.CLOSED)) {
+                return;
+            }
+            connection.setStatus(Connection.Status.CLOSING);
+
+            connection.participants().stream()
+                    .filter(p -> !p.equals(id))
+                    .map(peerStore::find)
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .forEach(p -> {
+                        try {
+                            sendForPeer(p, Endpoints.CLOSE.name(), new CloseRequest(connectionId), transportOptions);
+                        } catch(RuntimeException e) {
+                            log.warn("Encountered error while attempting to send close of connection {} to {}", connectionId, p, e);
+                        }
+                    });
+        }
+    }
+
+    @Override
     public QueryResult query(PeerId peerId, MessageId messageId, TransportOptions transportOptions) {
         var peer = peerStore.find(peerId).orElseThrow(() -> new NoSuchPeerException(peerId));
         var resp = exchangeForPeer(peer, Endpoints.QUERY.name(), new QueryRequest(messageId), QueryResponse.class, transportOptions)
@@ -270,7 +297,7 @@ class SimpleNode implements Node {
             if (!(ref instanceof Connection.Readable(Connection connection))) {
                 throw new NoSuchConnectionException(queryResult.queriedMessage().connectionId());
             }
-            participants = List.of(connection.sender(), connection.witness().orElseThrow(), connection.receiver());
+            participants = connection.participants();
         }
         var messageOpt = messageStore.find(queryResult.queriedMessage());
 

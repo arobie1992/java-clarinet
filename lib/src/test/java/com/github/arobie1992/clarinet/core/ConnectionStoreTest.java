@@ -7,6 +7,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -83,10 +85,55 @@ class ConnectionStoreTest {
     }
 
     @Test
+    void testFindForReadTimeout() throws Throwable {
+        var duration = Duration.ofSeconds(1);
+        runTimeoutTest(connectionId -> connectionStore.findForRead(connectionId, duration), duration);
+    }
+
+    @Test
+    void testFindForReadDefaultTimeout() throws Throwable {
+        runTimeoutTest(connectionStore::findForRead, Duration.ofSeconds(10));
+    }
+
+    @Test
     void testFindForWriteAbsent() {
         try(var ref = connectionStore.findForWrite(ConnectionId.random())) {
             assertEquals(Connection.Absent.class, ref.getClass());
         }
+    }
+
+    @Test
+    void testFindForWriteTimeout() throws Throwable {
+        var duration = Duration.ofSeconds(1);
+        runTimeoutTest(connectionId -> connectionStore.findForWrite(connectionId, duration), duration);
+    }
+
+    @Test
+    void testFindForWriteDefaultTimeout() throws Throwable {
+        runTimeoutTest(connectionStore::findForWrite, Duration.ofSeconds(10));
+    }
+
+    private void runTimeoutTest(Function<ConnectionId, Connection.Reference> task, Duration expected) throws Throwable {
+        var latch = new CountDownLatch(1);
+        var t1 = AsyncAssert.started(() -> {
+            // have to do write because it's the only one that's exclusive
+            try(var ignored = connectionStore.findForWrite(connectionId)) {
+                latch.countDown();
+                Thread.sleep(expected.toMillis() + 1000);
+            }
+        });
+
+        latch.await();
+        var start = LocalDateTime.now();
+        assertThrows(ConnectionObtainException.class, () -> task.apply(connectionId));
+        var end = LocalDateTime.now();
+
+        var actual = Duration.between(start, end);
+        var low = expected.minusSeconds(1);
+        var high = expected.plusSeconds(1);
+        assertTrue(low.compareTo(actual) < 0);
+        assertTrue(high.compareTo(actual) > 0);
+        t1.join();
     }
 
     private void runSyncTests(

@@ -2,6 +2,7 @@ package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.peer.PeerId;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -77,6 +78,11 @@ non-sealed class ConnectionImpl implements Connection {
         var seqNo = nextSeqNo;
         nextSeqNo++;
         return seqNo;
+    }
+
+    @Override
+    public List<PeerId> participants() {
+        return witness == null ? List.of(sender, receiver) : List.of(sender, witness, receiver);
     }
 
     private void assertWriteLocked() {

@@ -10,6 +10,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -97,6 +98,21 @@ class ConnectionImplTest {
         assertEquals(Long.MAX_VALUE, connection.nextSequenceNumber());
         var ex = assertThrows(ArithmeticException.class, () -> connection.nextSequenceNumber());
         assertEquals("nextSequenceNumber overflow", ex.getMessage());
+    }
+
+    @Test
+    void testParticipants() {
+        connection.lock.writeLock().lock();
+        connection.setWitness(PeerUtils.witnessId());
+        var participants = connection.participants();
+        assertEquals(List.of(connection.sender(), PeerUtils.witnessId(), connection.receiver()), participants);
+    }
+
+    @Test
+    void testParticipantsNoWitness() {
+        assertTrue(connection.witness().isEmpty());
+        var participants = connection.participants();
+        assertEquals(List.of(connection.sender(), connection.receiver()), participants);
     }
 
     private static Stream<Arguments> creationPermutations() {

@@ -42,6 +42,8 @@ public interface Node {
 
     MessageId send(ConnectionId connectionId, byte[] data, TransportOptions transportOptions);
 
+    void close(ConnectionId connectionId, CloseOptions closeOptions, TransportOptions transportOptions);
+
     /**
      * Query the given peer for the message and check if it matches the expectation.
      * <p>

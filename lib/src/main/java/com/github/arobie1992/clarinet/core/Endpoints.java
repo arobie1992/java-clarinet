@@ -7,7 +7,8 @@ public enum Endpoints {
     MESSAGE,
     REQUEST_PEERS,
     REQUEST_KEYS,
-    QUERY;
+    QUERY,
+    CLOSE;
 
     static boolean isEndpoint(String endpoint) {
         for (Endpoints e : Endpoints.values()) {
