@@ -78,7 +78,7 @@ class MessageHandlerProxy implements SendHandler<DataMessage> {
         node.messageStore().add(message);
 
         var witRep = node.reputationStore().find(witness);
-        // TODO have receiver forward message to sender if either signature is invalid
+        // TODO have receiver forward message to sender if sender signature is invalid
         if(node.checkSignature(message.witnessParts(), witness, message.witnessSignature())) {
             var sendRep = node.reputationStore().find(connection.sender());
             if(node.checkSignature(message.senderParts(), connection.sender(), message.senderSignature())) {

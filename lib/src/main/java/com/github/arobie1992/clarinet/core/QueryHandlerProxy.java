@@ -44,6 +44,12 @@ class QueryHandlerProxy implements ExchangeHandler<QueryRequest, QueryResponse> 
         Object parts = sender.equals(node.id()) || sender.equals(remoteInformation.peer().id())
                 ? storedMessage.senderParts()
                 : storedMessage.witnessParts();
+        // FIXME need incorporate message ID into the hash somehow
+        /*
+        More detailed, if the query response does not incorporate the messageId in some fashion a malicious node could
+        execute a query, get the response including a valid signature and then forward that with an invalid messageId
+        so that the node receiving the query forward is tricked into penalizing the queried node.
+         */
         var hash = node.hash(parts, HASH_ALG);
         var sig = node.genSignature(hash);
         return new Some<>(new QueryResponse(hash, sig, HASH_ALG));
