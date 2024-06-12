@@ -6,4 +6,7 @@ public class VerificationException extends RuntimeException {
     public VerificationException(GeneralSecurityException cause) {
         super(cause);
     }
+    public VerificationException(String message) {
+        super(message);
+    }
 }

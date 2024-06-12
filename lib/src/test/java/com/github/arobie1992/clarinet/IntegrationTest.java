@@ -77,7 +77,7 @@ class IntegrationTest {
                 .build();
         sender.transport().add(new UriAddress(new URI("tcp://localhost:0")));
         sender.keyStore().addKeyPair(sender.id(), Keys.generateKeyPair());
-        sender.keyStore().addProvider(KeyProviders.javaSignatureSha256RsaPublicKeyProvider());
+        sender.keyStore().addProvider(KeyProviders.Sha256RsaPublicKeyProvider());
 
         witness = Nodes.newBuilder().id(PeerUtils.witnessId())
                 .peerStore(new InMemoryPeerStore())
@@ -89,7 +89,7 @@ class IntegrationTest {
                 .build();
         witness.transport().add(new UriAddress(new URI("tcp://localhost:0")));
         witness.keyStore().addKeyPair(witness.id(), Keys.generateKeyPair());
-        witness.keyStore().addProvider(KeyProviders.javaSignatureSha256RsaPublicKeyProvider());
+        witness.keyStore().addProvider(KeyProviders.Sha256RsaPublicKeyProvider());
 
         receiver = Nodes.newBuilder().id(PeerUtils.receiverId())
                 .peerStore(new InMemoryPeerStore())
@@ -101,7 +101,7 @@ class IntegrationTest {
                 .build();
         receiver.transport().add(new UriAddress(new URI("tcp://localhost:0")));
         receiver.keyStore().addKeyPair(receiver.id(), Keys.generateKeyPair());
-        receiver.keyStore().addProvider(KeyProviders.javaSignatureSha256RsaPublicKeyProvider());
+        receiver.keyStore().addProvider(KeyProviders.Sha256RsaPublicKeyProvider());
 
         witnessNotificationLatch = new CountDownLatch(1);
         messageLatch = new CountDownLatch(1);

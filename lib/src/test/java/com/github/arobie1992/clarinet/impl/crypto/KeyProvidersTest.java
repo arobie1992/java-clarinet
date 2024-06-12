@@ -12,7 +12,7 @@ class KeyProvidersTest {
 
     @Test
     void testJavaSignatureSha256RsaPublicKeyProvider() throws NoSuchAlgorithmException {
-        var provider = KeyProviders.javaSignatureSha256RsaPublicKeyProvider();
+        var provider = KeyProviders.Sha256RsaPublicKeyProvider();
         assertTrue(provider.supports("SHA256withRSA"));
         var pair =  Keys.generateKeyPair();
         var createdKey = provider.create(pair.publicKey().bytes());
@@ -23,7 +23,7 @@ class KeyProvidersTest {
 
     @Test
     void testJavaSignatureSha256RsaPublicKeyProviderJunkBytes() {
-        var provider = KeyProviders.javaSignatureSha256RsaPublicKeyProvider();
+        var provider = KeyProviders.Sha256RsaPublicKeyProvider();
         var ex = assertThrows(KeyCreationException.class, () -> provider.create(new byte[]{62}));
         assertNotNull(ex.getCause());
         assertEquals(InvalidKeySpecException.class, ex.getCause().getClass());

@@ -37,6 +37,10 @@ class InMemoryKeyStoreTest {
             return false;
         }
         @Override
+        public boolean verifyHash(byte[] hash, byte[] signature) {
+            return false;
+        }
+        @Override
         public String algorithm() {
             return "";
         }

@@ -12,24 +12,25 @@ import java.security.spec.X509EncodedKeySpec;
 public class KeyProviders {
     private KeyProviders() {}
 
-    private static final PublicKeyProvider javaSignatureSha256RsaPublicKeyProvider = new PublicKeyProvider() {
+    private static final PublicKeyProvider Sha256RsaPublicKeyProvider = new PublicKeyProvider() {
+        private static final Sha256RsaPrivateKey REF_KEY = new Sha256RsaPrivateKey(null);
         @Override
         public PublicKey create(byte[] keyBytes) {
             try {
                 var kf = KeyFactory.getInstance("RSA");
                 var publicKey = kf.generatePublic(new X509EncodedKeySpec(keyBytes));
-                return new JavaSignatureSha256RsaPublicKey(publicKey);
+                return new Sha256RsaPublicKey(publicKey);
             } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
                 throw new KeyCreationException(e);
             }
         }
         @Override
         public boolean supports(String algorithm) {
-            return "SHA256withRSA".equals(algorithm);
+            return REF_KEY.algorithm().equals(algorithm);
         }
     };
 
-    public static PublicKeyProvider javaSignatureSha256RsaPublicKeyProvider() {
-        return javaSignatureSha256RsaPublicKeyProvider;
+    public static PublicKeyProvider Sha256RsaPublicKeyProvider() {
+        return Sha256RsaPublicKeyProvider;
     }
 }

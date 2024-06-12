@@ -14,8 +14,8 @@ public class Keys {
         gen.initialize(2048, new SecureRandom());
         var keyPair = gen.generateKeyPair();
         return new KeyPair(
-                new JavaSignatureSha256RsaPublicKey(keyPair.getPublic()),
-                new JavaSignatureSha256RsaPrivateKey(keyPair.getPrivate())
+                new Sha256RsaPublicKey(keyPair.getPublic()),
+                new Sha256RsaPrivateKey(keyPair.getPrivate())
         );
     }
 }
