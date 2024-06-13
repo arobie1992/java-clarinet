@@ -1,9 +1,7 @@
 package com.github.arobie1992.clarinet.core;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.github.arobie1992.clarinet.message.DataMessage;
-import com.github.arobie1992.clarinet.message.MessageId;
-import com.github.arobie1992.clarinet.message.MessageStore;
+import com.github.arobie1992.clarinet.message.*;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.peer.PeerStore;
 import com.github.arobie1992.clarinet.reputation.Reputation;
@@ -38,6 +36,7 @@ class MessageHandlerProxyTest {
     private MessageHandlerProxy proxy;
     private ConnectionImpl connection;
     private MessageStore messageStore;
+    private PeerStore peerStore;
 
     private Reputation senderRep;
     private Reputation witnessRep;
@@ -62,12 +61,12 @@ class MessageHandlerProxyTest {
         when(node.id()).thenReturn(connection.witness().orElseThrow());
         // don't know why the mock isn't working when I pass the witness parts (probably a dumb mistake), so do this for now.
         // does mean we need to be careful about calling genSignature
-        when(node.genSignature(any())).thenReturn(witnessSignature);
+        when(node.genSignature(any(Object.class))).thenReturn(witnessSignature);
 
         messageStore = mock(MessageStore.class);
         when(node.messageStore()).thenReturn(messageStore);
 
-        var peerStore = mock(PeerStore.class);
+        peerStore = mock(PeerStore.class);
         when(node.peerStore()).thenReturn(peerStore);
         when(peerStore.find(remoteInformation.peer().id())).thenReturn(Optional.empty());
 
@@ -197,6 +196,16 @@ class MessageHandlerProxyTest {
     void testReceiverSenderSignatureInvalid() throws JsonProcessingException {
         when(node.id()).thenReturn(connection.receiver());
         message.setWitnessSignature(witnessSignature);
+
+        when(node.id()).thenReturn(connection.receiver());
+        var msgHash = new byte[]{4,4,4};
+        when(node.hash(message.witnessParts(), "SHA-256")).thenReturn(msgHash);
+        var fwdSig = new byte[]{7,7,7};
+        var summary = new MessageSummary(message.messageId(), msgHash, "SHA-256", witnessSignature);
+        when(node.genSignature(summary)).thenReturn(fwdSig);
+        var sender = mock(Peer.class);
+        when(peerStore.find(connection.sender())).thenReturn(Optional.of(sender));
+
         when(node.checkSignature(
                 eq(message.witnessParts()),
                 eq(connection.witness().orElseThrow()),
@@ -213,6 +222,7 @@ class MessageHandlerProxyTest {
         verify(witnessRep).weakPenalize();
         verify(reputationStore).save(senderRep);
         verify(reputationStore).save(witnessRep);
+        verify(node).sendForPeer(sender, Endpoints.MESSAGE_FORWARD.name(), new MessageForward(summary, fwdSig), new TransportOptions());
     }
 
     @Test

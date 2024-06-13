@@ -36,15 +36,15 @@ class SimpleNode implements Node {
 
     private final PeerId id;
     private final PeerStore peerStore;
-    private final ConnectionStore connectionStore = new ConnectionStore();
-    private final TransportProxy transport;
+    final ConnectionStore connectionStore = new ConnectionStore();
+    final TransportProxy transport;
     private final Function<Stream<? extends Reputation>, Stream<PeerId>> trustFilter;
     private final ReputationStore reputationStore;
     private final MessageStore messageStore;
     private final KeyStore keyStore;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private SimpleNode(Builder builder) {
+    SimpleNode(Builder builder) {
         this.id = Objects.requireNonNull(builder.id, "id");
         this.peerStore = Objects.requireNonNull(builder.peerStore, "peerStore");
 
@@ -131,7 +131,7 @@ class SimpleNode implements Node {
         }).filter(Objects::nonNull);
     }
 
-    private void sendForPeer(Peer peer, String endpoint, Object request, TransportOptions transportOptions) {
+    void sendForPeer(Peer peer, String endpoint, Object request, TransportOptions transportOptions) {
         for(var addr : peer.addresses()) {
             try {
                 transport.send(addr, endpoint, request, transportOptions);
@@ -544,7 +544,7 @@ class SimpleNode implements Node {
         private SendHandler<WitnessNotification> witnessNotificationHandler;
         private MessageStore messageStore;
         private KeyStore keyStore;
-        private SendHandler<DataMessage> messageHandler;
+        SendHandler<DataMessage> messageHandler;
         private ExchangeHandler<PeersRequest, PeersResponse> peersRequestHandler;
         private ExchangeHandler<KeysRequest, KeysResponse> keysRequestHandler;
         private ExchangeHandler<QueryRequest, QueryResponse> queryHandler;

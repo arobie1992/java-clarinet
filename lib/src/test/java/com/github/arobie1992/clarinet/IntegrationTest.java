@@ -117,38 +117,44 @@ class IntegrationTest {
         }
     }
 
+    private static final class RetrieveAddrsWitnessHandler implements ExchangeHandler<WitnessRequest, WitnessResponse> {
+        private final Node node;
+
+        private RetrieveAddrsWitnessHandler(Node node) {
+            this.node = node;
+        }
+
+        @Override
+        public Some<WitnessResponse> handle(RemoteInformation remoteInformation, WitnessRequest message) {
+            var neededPeers = new HashSet<PeerId>();
+            if(needsAddress(message.sender())) {
+                neededPeers.add(message.sender());
+            }
+            if(needsAddress(message.receiver())) {
+                neededPeers.add(message.receiver());
+            }
+            node.requestPeers(remoteInformation.peer().id(), new PeersRequest(neededPeers), TransportUtils.defaultOptions())
+                    .peers()
+                    .forEach(node.peerStore()::save);
+            var rejected = needsAddress(message.receiver());
+            var reason = rejected ? "No address for receiver" : null;
+            return new Some<>(new WitnessResponse(rejected, reason));
+        }
+        private boolean needsAddress(PeerId peerId) {
+            return node.peerStore().find(peerId).map(p -> p.addresses().isEmpty()).orElse(true);
+        }
+        @Override
+        public Class<WitnessRequest> inputType() {
+            return WitnessRequest.class;
+        }
+    }
+
     @Test
     void testCooperative() throws InterruptedException, JsonProcessingException {
         sender.peerStore().save(asPeer(receiver));
         sender.peerStore().save(asPeer(witness));
         receiver.addWitnessNotificationHandler(new SendLatchHandler<>(witnessNotificationLatch, WitnessNotification.class));
-
-        witness.addWitnessRequestHandler(new ExchangeHandler<>() {
-            @Override
-            public Some<WitnessResponse> handle(RemoteInformation remoteInformation, WitnessRequest message) {
-                var neededPeers = new HashSet<PeerId>();
-                if(needsAddress(message.sender())) {
-                    neededPeers.add(sender.id());
-                }
-                if(needsAddress(message.receiver())) {
-                    neededPeers.add(receiver.id());
-                }
-                witness.requestPeers(remoteInformation.peer().id(), new PeersRequest(neededPeers), TransportUtils.defaultOptions())
-                        .peers()
-                        .forEach(witness.peerStore()::save);
-                var rejected = needsAddress(message.receiver());
-                var reason = rejected ? "No address for receiver" : null;
-                return new Some<>(new WitnessResponse(rejected, reason));
-            }
-            private boolean needsAddress(PeerId peerId) {
-                return witness.peerStore().find(peerId).map(p -> p.addresses().isEmpty()).orElse(true);
-            }
-            @Override
-            public Class<WitnessRequest> inputType() {
-                return WitnessRequest.class;
-            }
-        });
-
+        witness.addWitnessRequestHandler(new RetrieveAddrsWitnessHandler(witness));
         receiver.addMessageHandler(new SendLatchHandler<>(messageLatch, DataMessage.class));
 
         // connection creation
@@ -227,10 +233,62 @@ class IntegrationTest {
         fail("implement");
     }
 
-    @Disabled
     @Test
-    void testMaliciousWitness() {
-        fail("implement");
+    void testMaliciousWitness() throws NoSuchAlgorithmException, URISyntaxException, InterruptedException {
+        witness = new MaliciousNode.MaliciuosNodeBuilder().id(PeerUtils.witnessId())
+                .peerStore(new InMemoryPeerStore())
+                .transport(() -> new NettyTransport(PeerUtils.witnessId(), TransportUtils.defaultOptions()))
+                .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
+                .reputationStore(new InMemoryReputationStore(TestReputation::new))
+                .messageStore(new InMemoryMessageStore())
+                .keyStore(new InMemoryKeyStore())
+                .build();
+        witness.transport().add(new UriAddress(new URI("tcp://localhost:0")));
+        witness.keyStore().addKeyPair(witness.id(), Keys.generateKeyPair());
+        witness.keyStore().addProvider(KeyProviders.Sha256RsaPublicKeyProvider());
+
+        sender.peerStore().save(asPeer(receiver));
+        sender.peerStore().save(asPeer(witness));
+        receiver.addWitnessNotificationHandler(new SendLatchHandler<>(witnessNotificationLatch, WitnessNotification.class));
+        witness.addWitnessRequestHandler(new RetrieveAddrsWitnessHandler(witness));
+        receiver.addMessageHandler(new SendLatchHandler<>(messageLatch, DataMessage.class));
+
+        // connection creation
+        var connectionId = sender.connect(receiver.id(), new ConnectionOptions(), TransportUtils.defaultOptions());
+        // need latch to ensure test doesn't do verification before the witness notification handler has executed
+        // if it waited all 5 seconds, something's probably wrong and we want to revisit this.
+        assertTrue(witnessNotificationLatch.await(5, TimeUnit.SECONDS));
+
+        // sending a message
+        var data = new byte[]{0, 1, 2, 3, 4};
+        var messageId = sender.send(connectionId, data, TransportUtils.defaultOptions());
+        // need latch to ensure test doesn't do verification before the receiver gets the message
+        // if it waited all 5 seconds, something's probably wrong and we want to revisit this.
+        assertTrue(messageLatch.await(5000, TimeUnit.SECONDS));
+
+        // sender has strongly penalized witness and nothing on receiver
+        verifyReputation(sender, witness.id(), 0);
+        verifyReputation(sender, receiver.id(), 1);
+        // witness is malicious so we don't care
+        // receiver has weakly penalized both sender and witness
+        verifyReputation(receiver, sender.id(), 0);
+        verifyReputation(receiver, witness.id(), 0);
+
+        // sender querying message
+        var resp = sender.query(witness.id(), messageId, new TransportOptions());
+        sender.updateReputation(resp);
+        verifyReputation(sender, witness.id(), 1);
+        resp = sender.query(receiver.id(), messageId, new TransportOptions());
+        sender.updateReputation(resp);
+        verifyReputation(sender, receiver.id(), 1);
+
+        // receiver querying message
+        resp = receiver.query(sender.id(), messageId, new TransportOptions());
+        receiver.updateReputation(resp);
+        verifyReputation(receiver, sender.id(), 1);
+        resp = receiver.query(witness.id(), messageId, new TransportOptions());
+        receiver.updateReputation(resp);
+        verifyReputation(receiver, witness.id(), 1);
     }
 
     @Disabled

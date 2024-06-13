@@ -3,6 +3,8 @@ package com.github.arobie1992.clarinet.core;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.github.arobie1992.clarinet.adt.None;
 import com.github.arobie1992.clarinet.message.DataMessage;
+import com.github.arobie1992.clarinet.message.MessageForward;
+import com.github.arobie1992.clarinet.message.MessageSummary;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.transport.RemoteInformation;
 import com.github.arobie1992.clarinet.transport.SendHandler;
@@ -14,6 +16,7 @@ import java.util.Objects;
 
 class MessageHandlerProxy implements SendHandler<DataMessage> {
     private static final None<Void> THE_NONE = new None<>();
+    private static final String HASH_ALG = "SHA-256";
 
     private final SendHandler<DataMessage> userHandler;
     private final ConnectionStore connectionStore;
@@ -87,6 +90,14 @@ class MessageHandlerProxy implements SendHandler<DataMessage> {
             } else {
                 witRep.weakPenalize();
                 sendRep.weakPenalize();
+                /* FIXME this isn't going to work in a real impl because the witness could've used a different hashing algorithm
+                   but should work for this prototype; long term would probably be to have the nodes agree upon a hash algorithm
+                   as part of the connection */
+                var hash = node.hash(message.witnessParts(), HASH_ALG);
+                var summary = new MessageSummary(message.messageId(), hash, HASH_ALG, message.witnessSignature().orElseThrow());
+                var sig = node.genSignature(summary);
+                var sender = node.peerStore().find(connection.sender()).orElseThrow(() -> new NoSuchPeerException(connection.sender()));
+                node.sendForPeer(sender, Endpoints.MESSAGE_FORWARD.name(), new MessageForward(summary, sig), new TransportOptions());
             }
             node.reputationStore().save(sendRep);
         } else {
