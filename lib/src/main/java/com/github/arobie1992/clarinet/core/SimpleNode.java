@@ -61,8 +61,12 @@ class SimpleNode implements Node {
         this.transport.addInternal(Endpoints.MESSAGE.name(), new MessageHandlerProxy(builder.messageHandler, connectionStore, this));
         this.transport.addInternal(Endpoints.REQUEST_PEERS.name(), new PeersRequestHandlerProxy(builder.peersRequestHandler, this));
         this.transport.addInternal(Endpoints.REQUEST_KEYS.name(), new KeysRequestHandlerProxy(builder.keysRequestHandler, this));
-        this.transport.addInternal(Endpoints.QUERY.name(), new QueryHandlerProxy(builder.queryHandler, connectionStore, this));
+        this.transport.addInternal(Endpoints.QUERY.name(), new QueryHandlerProxy(builder.queryHandler, this));
         this.transport.addInternal(Endpoints.CLOSE.name(), new CloseHandlerProxy(builder.closeHandler, connectionStore));
+        this.transport.addInternal(
+                Endpoints.MESSAGE_FORWARD.name(),
+                new MessageForwardHandlerProxy(builder.messageForwardHandler, connectionStore, this)
+        );
 
         this.trustFilter = Objects.requireNonNull(builder.trustFilter, "trustFilter");
         this.reputationStore = Objects.requireNonNull(builder.reputationStore, "reputationStore");
@@ -310,7 +314,7 @@ class SimpleNode implements Node {
             return false;
         } else if(messageOpt.isEmpty()) {
             return false;
-        } else if(!responseMatches(participants.getFirst(), queryResult.queriedPeer(), messageOpt.get(), queryResult.queryResponse())) {
+        } else if(!responseMatches(messageOpt.get(), queryResult.queryResponse())) {
             if(directCommunication(queryResult.queriedPeer(), participants)) {
                 reputation.strongPenalize();
             } else {
@@ -334,9 +338,8 @@ class SimpleNode implements Node {
         }
     }
 
-    private boolean responseMatches(PeerId sender, PeerId queriedPeer, DataMessage message, QueryResponse queryResponse) {
-        var parts = sender.equals(id()) || sender.equals(queriedPeer) ? message.senderParts() : message.witnessParts();
-        return Arrays.equals(hash(parts, queryResponse.hashAlgorithm()), queryResponse.hash());
+    private boolean responseMatches(DataMessage message, QueryResponse queryResponse) {
+        return Arrays.equals(hash(message.witnessParts(), queryResponse.hashAlgorithm()), queryResponse.hash());
     }
 
     private Reputation getOtherParticipantReputation(List<PeerId> participants, PeerId queriedPeer) {
@@ -383,6 +386,22 @@ class SimpleNode implements Node {
                 .map(k -> {
                     try {
                         return k.verify(data, signature);
+                    } catch (RuntimeException e) {
+                        log.debug("Encountered error for key {}", k, e);
+                        return false;
+                    }
+                })
+                .filter(v -> v)
+                .findFirst()
+                .orElse(false);
+    }
+
+    boolean checkSignatureHash(byte[] hash, PeerId peerId, byte[] signature) {
+        var keys = getOrLoadKeys(peerId);
+        return  keys.stream()
+                .map(k -> {
+                    try {
+                        return k.verifyHash(hash, signature);
                     } catch (RuntimeException e) {
                         log.debug("Encountered error for key {}", k, e);
                         return false;
@@ -515,12 +534,12 @@ class SimpleNode implements Node {
 
     @Override
     public void addQueryHandler(ExchangeHandler<QueryRequest, QueryResponse> queryHandler) {
-        this.transport.addInternal(Endpoints.QUERY.name(), new QueryHandlerProxy(queryHandler, connectionStore, this));
+        this.transport.addInternal(Endpoints.QUERY.name(), new QueryHandlerProxy(queryHandler, this));
     }
 
     @Override
     public void removeQueryHandler() {
-        this.transport.addInternal(Endpoints.QUERY.name(), new QueryHandlerProxy(null, connectionStore, this));
+        this.transport.addInternal(Endpoints.QUERY.name(), new QueryHandlerProxy(null, this));
     }
 
     @Override
@@ -531,6 +550,22 @@ class SimpleNode implements Node {
     @Override
     public void removeCloseHandler() {
         this.transport.addInternal(Endpoints.CLOSE.name(), new CloseHandlerProxy(null, connectionStore));
+    }
+
+    @Override
+    public void addMessageForwardHandler(SendHandler<MessageForward> messageForwardHandler) {
+        this.transport.addInternal(
+                Endpoints.MESSAGE_FORWARD.name(),
+                new MessageForwardHandlerProxy(messageForwardHandler, connectionStore, this)
+        );
+    }
+
+    @Override
+    public void removeMessageForwardHandler() {
+        this.transport.addInternal(
+                Endpoints.MESSAGE_FORWARD.name(),
+                new MessageForwardHandlerProxy(null, connectionStore, this)
+        );
     }
 
     static class Builder implements NodeBuilder {
@@ -549,6 +584,7 @@ class SimpleNode implements Node {
         private ExchangeHandler<KeysRequest, KeysResponse> keysRequestHandler;
         private ExchangeHandler<QueryRequest, QueryResponse> queryHandler;
         private SendHandler<CloseRequest> closeHandler;
+        private SendHandler<MessageForward> messageForwardHandler;
 
         @Override
         public NodeBuilder id(PeerId id) {
@@ -637,6 +673,12 @@ class SimpleNode implements Node {
         @Override
         public NodeBuilder closeHandler(SendHandler<CloseRequest> closeHandler) {
             this.closeHandler = closeHandler;
+            return this;
+        }
+
+        @Override
+        public NodeBuilder messageForwardHandler(SendHandler<MessageForward> messageForwardHandler) {
+            this.messageForwardHandler = messageForwardHandler;
             return this;
         }
 

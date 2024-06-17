@@ -28,11 +28,9 @@ class QueryHandlerProxyTest {
     private final DataMessage storedMessage = new DataMessage(queryRequest.messageId(), new byte[]{123});
 
     private ExchangeHandler<QueryRequest, QueryResponse> handler;
-    private ConnectionStore connectionStore;
     private SimpleNode node;
     private QueryHandlerProxy proxy;
     private MessageStore messageStore;
-    private ConnectionImpl connection;
 
     public QueryHandlerProxyTest() {
         storedMessage.setSenderSignature(new byte[]{22});
@@ -43,29 +41,17 @@ class QueryHandlerProxyTest {
     void setUp() {
         //noinspection unchecked
         handler = (ExchangeHandler<QueryRequest, QueryResponse>) mock(ExchangeHandler.class);
-        connectionStore = mock(ConnectionStore.class);
         node = mock(SimpleNode.class);
-        proxy = new QueryHandlerProxy(null, connectionStore, node);
-
+        proxy = new QueryHandlerProxy(null, node);
         messageStore = mock(MessageStore.class);
         when(node.messageStore()).thenReturn(messageStore);
         when(messageStore.find(queryRequest.messageId())).thenReturn(Optional.of(storedMessage));
-
-        connection = new ConnectionImpl(
-                queryRequest.messageId().connectionId(),
-                PeerUtils.senderId(),
-                PeerUtils.receiverId(),
-                Connection.Status.OPEN
-        );
-        connection.lock.readLock().lock();
-        when(connectionStore.findForRead(queryRequest.messageId().connectionId())).thenReturn(new Connection.Readable(connection));
-
         when(node.genSignature(expected.hash())).thenReturn(expected.signature());
     }
 
     @Test
     void testHonorsUserHandler() {
-        proxy = new QueryHandlerProxy(handler, connectionStore, node);
+        proxy = new QueryHandlerProxy(handler, node);
         var expected = new Some<>(new QueryResponse(null,null, null));
         when(handler.handle(remoteInformation, queryRequest)).thenReturn(expected);
         assertEquals(expected, proxy.handle(remoteInformation, queryRequest));
@@ -73,7 +59,7 @@ class QueryHandlerProxyTest {
 
     @Test
     void testUserHandlerReturnsNull() {
-        proxy = new QueryHandlerProxy(handler, connectionStore, node);
+        proxy = new QueryHandlerProxy(handler, node);
         when(handler.handle(remoteInformation, queryRequest)).thenReturn(null);
         var ex = assertThrows(NullPointerException.class, () -> proxy.handle(remoteInformation, queryRequest));
         assertEquals("userHandler returned null", ex.getMessage());
@@ -87,34 +73,7 @@ class QueryHandlerProxyTest {
     }
 
     @Test
-    void testNoConnection() {
-        when(connectionStore.findForRead(queryRequest.messageId().connectionId())).thenReturn(new Connection.Absent());
-        assertThrows(NoSuchConnectionException.class, () -> proxy.handle(remoteInformation, queryRequest));
-    }
-
-    @Test
-    void testNodeIsSender() {
-        when(node.id()).thenReturn(connection.sender());
-        when(node.hash(storedMessage.senderParts(), expected.hashAlgorithm())).thenReturn(expected.hash());
-        assertEquals(expected, proxy.handle(remoteInformation, queryRequest).value());
-    }
-
-    @Test
-    void testRequestorIsSender() {
-        when(node.hash(storedMessage.senderParts(), expected.hashAlgorithm())).thenReturn(expected.hash());
-        assertEquals(expected, proxy.handle(remoteInformation, queryRequest).value());
-    }
-
-    @Test
-    void testNeitherIsSender() {
-        connection = new ConnectionImpl(
-                queryRequest.messageId().connectionId(),
-                PeerUtils.witnessId(),
-                PeerUtils.receiverId(),
-                Connection.Status.OPEN
-        );
-        connection.lock.readLock().lock();
-        when(connectionStore.findForRead(queryRequest.messageId().connectionId())).thenReturn(new Connection.Readable(connection));
+    void testHasMessage() {
         when(node.hash(storedMessage.witnessParts(), expected.hashAlgorithm())).thenReturn(expected.hash());
         assertEquals(expected, proxy.handle(remoteInformation, queryRequest).value());
     }

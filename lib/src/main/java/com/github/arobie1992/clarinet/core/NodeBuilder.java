@@ -1,10 +1,7 @@
 package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.crypto.KeyStore;
-import com.github.arobie1992.clarinet.message.DataMessage;
-import com.github.arobie1992.clarinet.message.MessageStore;
-import com.github.arobie1992.clarinet.message.QueryRequest;
-import com.github.arobie1992.clarinet.message.QueryResponse;
+import com.github.arobie1992.clarinet.message.*;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
 import com.github.arobie1992.clarinet.reputation.Reputation;
@@ -121,6 +118,15 @@ public interface NodeBuilder {
      * @return {@code this} builder for fluent building.
      */
     NodeBuilder closeHandler(SendHandler<CloseRequest> closeHandler);
+
+    /**
+     * User-defined behavior for dealing with message forwards.
+     * <p>
+     * Users do not need to perform reputation updates themselves.
+     * @param messageForwardHandler The handler implementing the user-desired behavior.
+     * @return {@code this} builder for fluent building.
+     */
+    NodeBuilder messageForwardHandler(SendHandler<MessageForward> messageForwardHandler);
 
     Node build();
 }

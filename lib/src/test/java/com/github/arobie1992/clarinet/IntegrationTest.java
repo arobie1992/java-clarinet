@@ -18,14 +18,15 @@ import com.github.arobie1992.clarinet.impl.netty.ConnectionIdSerializer;
 import com.github.arobie1992.clarinet.impl.netty.NettyTransport;
 import com.github.arobie1992.clarinet.impl.netty.PeerIdSerializer;
 import com.github.arobie1992.clarinet.impl.peer.UriAddress;
+import com.github.arobie1992.clarinet.impl.reputation.ProportionalReputation;
 import com.github.arobie1992.clarinet.message.DataMessage;
+import com.github.arobie1992.clarinet.message.MessageForward;
 import com.github.arobie1992.clarinet.message.MessageId;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.reputation.TrustFilters;
 import com.github.arobie1992.clarinet.testutils.PeerUtils;
 import com.github.arobie1992.clarinet.testutils.TestConnection;
-import com.github.arobie1992.clarinet.testutils.TestReputation;
 import com.github.arobie1992.clarinet.testutils.TransportUtils;
 import com.github.arobie1992.clarinet.transport.ExchangeHandler;
 import com.github.arobie1992.clarinet.transport.RemoteInformation;
@@ -71,7 +72,7 @@ class IntegrationTest {
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(PeerUtils.senderId(), TransportUtils.defaultOptions()))
                 .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
-                .reputationStore(new InMemoryReputationStore(TestReputation::new))
+                .reputationStore(new InMemoryReputationStore(ProportionalReputation::new))
                 .messageStore(new InMemoryMessageStore())
                 .keyStore(new InMemoryKeyStore())
                 .build();
@@ -83,7 +84,7 @@ class IntegrationTest {
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(PeerUtils.witnessId(), TransportUtils.defaultOptions()))
                 .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
-                .reputationStore(new InMemoryReputationStore(TestReputation::new))
+                .reputationStore(new InMemoryReputationStore(ProportionalReputation::new))
                 .messageStore(new InMemoryMessageStore())
                 .keyStore(new InMemoryKeyStore())
                 .build();
@@ -95,7 +96,7 @@ class IntegrationTest {
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(PeerUtils.receiverId(), TransportUtils.defaultOptions()))
                 .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
-                .reputationStore(new InMemoryReputationStore(TestReputation::new))
+                .reputationStore(new InMemoryReputationStore(ProportionalReputation::new))
                 .messageStore(new InMemoryMessageStore())
                 .keyStore(new InMemoryKeyStore())
                 .build();
@@ -117,20 +118,14 @@ class IntegrationTest {
         }
     }
 
-    private static final class RetrieveAddrsWitnessHandler implements ExchangeHandler<WitnessRequest, WitnessResponse> {
-        private final Node node;
-
-        private RetrieveAddrsWitnessHandler(Node node) {
-            this.node = node;
-        }
-
+    private record RetrieveAddrsWitnessHandler(Node node) implements ExchangeHandler<WitnessRequest, WitnessResponse> {
         @Override
         public Some<WitnessResponse> handle(RemoteInformation remoteInformation, WitnessRequest message) {
             var neededPeers = new HashSet<PeerId>();
-            if(needsAddress(message.sender())) {
+            if (needsAddress(message.sender())) {
                 neededPeers.add(message.sender());
             }
-            if(needsAddress(message.receiver())) {
+            if (needsAddress(message.receiver())) {
                 neededPeers.add(message.receiver());
             }
             node.requestPeers(remoteInformation.peer().id(), new PeersRequest(neededPeers), TransportUtils.defaultOptions())
@@ -239,13 +234,19 @@ class IntegrationTest {
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(PeerUtils.witnessId(), TransportUtils.defaultOptions()))
                 .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
-                .reputationStore(new InMemoryReputationStore(TestReputation::new))
+                .reputationStore(new InMemoryReputationStore(ProportionalReputation::new))
                 .messageStore(new InMemoryMessageStore())
                 .keyStore(new InMemoryKeyStore())
                 .build();
         witness.transport().add(new UriAddress(new URI("tcp://localhost:0")));
         witness.keyStore().addKeyPair(witness.id(), Keys.generateKeyPair());
         witness.keyStore().addProvider(KeyProviders.Sha256RsaPublicKeyProvider());
+
+        // start out with rewarded reps so that it's not just always 0.
+        reward(sender, witness.id());
+        reward(sender, receiver.id());
+        reward(receiver, sender.id());
+        reward(receiver, witness.id());
 
         sender.peerStore().save(asPeer(receiver));
         sender.peerStore().save(asPeer(witness));
@@ -259,36 +260,56 @@ class IntegrationTest {
         // if it waited all 5 seconds, something's probably wrong and we want to revisit this.
         assertTrue(witnessNotificationLatch.await(5, TimeUnit.SECONDS));
 
+        var forwardLatch = new CountDownLatch(1);
+        sender.addMessageForwardHandler(new SendLatchHandler<>(forwardLatch, MessageForward.class));
+
         // sending a message
         var data = new byte[]{0, 1, 2, 3, 4};
         var messageId = sender.send(connectionId, data, TransportUtils.defaultOptions());
         // need latch to ensure test doesn't do verification before the receiver gets the message
         // if it waited all 5 seconds, something's probably wrong and we want to revisit this.
-        assertTrue(messageLatch.await(5000, TimeUnit.SECONDS));
+        assertTrue(messageLatch.await(5, TimeUnit.SECONDS));
+        assertTrue(forwardLatch.await(5, TimeUnit.SECONDS));
 
-        // sender has strongly penalized witness and nothing on receiver
-        verifyReputation(sender, witness.id(), 0);
+        // initial reward + strong pen = 1/4
+        verifyReputation(sender, witness.id(), 0.25);
+        // just initial reward = 1/1
         verifyReputation(sender, receiver.id(), 1);
         // witness is malicious so we don't care
-        // receiver has weakly penalized both sender and witness
-        verifyReputation(receiver, sender.id(), 0);
-        verifyReputation(receiver, witness.id(), 0);
+        // initial reward + weak pen = 1/2
+        verifyReputation(receiver, sender.id(), 0.5);
+        // initial reward + weak pen = 1/2
+        verifyReputation(receiver, witness.id(), 0.5);
 
         // sender querying message
         var resp = sender.query(witness.id(), messageId, new TransportOptions());
         sender.updateReputation(resp);
-        verifyReputation(sender, witness.id(), 1);
+        // initial reward + strong pen + strong pen = 1/7
+        verifyReputation(sender, witness.id(), 1.0/7);
         resp = sender.query(receiver.id(), messageId, new TransportOptions());
         sender.updateReputation(resp);
-        verifyReputation(sender, receiver.id(), 1);
+        // initial reward + weak pen = 1/2
+        verifyReputation(sender, receiver.id(), 0.5);
 
+        /*
+        FIXME
+         The issue is that the receiver has already penalized the sender and the witness in addition to forwarding this
+         information to the sender so querying is essentially double-dipping and since the malicious witness just
+         maintains its story the sender ends up looking worse.
+         */
         // receiver querying message
         resp = receiver.query(sender.id(), messageId, new TransportOptions());
         receiver.updateReputation(resp);
-        verifyReputation(receiver, sender.id(), 1);
+        // initial reward + weak pen + reward = 1/3
+        var senderRep = 1.0/3;
+        var witrep = 0.5;
+        verifyReputation(receiver, sender.id(), senderRep);
         resp = receiver.query(witness.id(), messageId, new TransportOptions());
         receiver.updateReputation(resp);
-        verifyReputation(receiver, witness.id(), 1);
+        // initial reward + weak pen + weak pen (query sender) + reward = 2/4
+        //
+        verifyReputation(receiver, witness.id(),  witrep);
+        assertTrue(senderRep >= witrep);
     }
 
     @Disabled
@@ -437,5 +458,11 @@ class IntegrationTest {
     private void verifyReputation(Node node, PeerId peerId, double expected) {
         var reputation = node.reputationStore().find(peerId);
         assertEquals(expected, reputation.value());
+    }
+
+    private void reward(Node node, PeerId peerId) {
+        var rep = node.reputationStore().find(peerId);
+        rep.reward();
+        node.reputationStore().save(rep);
     }
 }

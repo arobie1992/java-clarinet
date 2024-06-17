@@ -122,4 +122,8 @@ public interface Node {
     void addCloseHandler(SendHandler<CloseRequest> closeHandler);
 
     void removeCloseHandler();
+
+    void addMessageForwardHandler(SendHandler<MessageForward> messageForwardHandler);
+
+    void removeMessageForwardHandler();
 }

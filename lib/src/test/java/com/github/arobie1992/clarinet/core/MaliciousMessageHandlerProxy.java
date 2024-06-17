@@ -7,9 +7,9 @@ import com.github.arobie1992.clarinet.transport.SendHandler;
 
 public class MaliciousMessageHandlerProxy extends MessageHandlerProxy {
     private final ConnectionStore connectionStore;
-    private final Node node;
+    private final MaliciousNode node;
 
-    MaliciousMessageHandlerProxy(SendHandler<DataMessage> userHandler, ConnectionStore connectionStore, SimpleNode node) {
+    MaliciousMessageHandlerProxy(SendHandler<DataMessage> userHandler, ConnectionStore connectionStore, MaliciousNode node) {
         super(userHandler, connectionStore, node);
         this.connectionStore = connectionStore;
         this.node = node;
@@ -24,7 +24,7 @@ public class MaliciousMessageHandlerProxy extends MessageHandlerProxy {
             }
             isWitness = connection.witness().map(id -> id.equals(node.id())).orElse(false);
         }
-        if(isWitness) {
+        if(isWitness && node.invalidSendSigOnMessage) {
             message.setSenderSignature(new byte[]{106, 117, 110, 107});
         }
         return super.handle(remoteInformation, message);
