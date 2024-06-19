@@ -4,8 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.github.arobie1992.clarinet.message.*;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.peer.PeerStore;
-import com.github.arobie1992.clarinet.reputation.Reputation;
-import com.github.arobie1992.clarinet.reputation.ReputationStore;
+import com.github.arobie1992.clarinet.reputation.Assessment;
+import com.github.arobie1992.clarinet.reputation.AssessmentStore;
+import com.github.arobie1992.clarinet.reputation.ReputationService;
 import com.github.arobie1992.clarinet.testutils.AddressUtils;
 import com.github.arobie1992.clarinet.testutils.PeerUtils;
 import com.github.arobie1992.clarinet.transport.RemoteInformation;
@@ -38,9 +39,9 @@ class MessageHandlerProxyTest {
     private MessageStore messageStore;
     private PeerStore peerStore;
 
-    private Reputation senderRep;
-    private Reputation witnessRep;
-    private ReputationStore reputationStore;
+    private Assessment senderAsmt;
+    private Assessment witnessAsmt;
+    private AssessmentStore assessmentStore;
 
     @BeforeEach
     void setUp() throws JsonProcessingException {
@@ -70,18 +71,21 @@ class MessageHandlerProxyTest {
         when(node.peerStore()).thenReturn(peerStore);
         when(peerStore.find(remoteInformation.peer().id())).thenReturn(Optional.empty());
 
-        reputationStore = mock(ReputationStore.class);
-        when(node.reputationStore()).thenReturn(reputationStore);
-        senderRep = mock(Reputation.class);
-        witnessRep = mock(Reputation.class);
-        when(reputationStore.find(connection.sender())).thenReturn(senderRep);
-        when(reputationStore.find(connection.witness().orElseThrow())).thenReturn(witnessRep);
+        assessmentStore = mock(AssessmentStore.class);
+        when(node.assessmentStore()).thenReturn(assessmentStore);
+        senderAsmt = new Assessment(PeerUtils.senderId(), message.messageId(), Assessment.Status.NONE);
+        witnessAsmt = new Assessment(PeerUtils.witnessId(), message.messageId(), Assessment.Status.NONE);
+        when(assessmentStore.find(connection.sender(), message.messageId())).thenReturn(senderAsmt);
+        when(assessmentStore.find(connection.witness().orElseThrow(), message.messageId())).thenReturn(witnessAsmt);
 
         when(node.checkSignature(
                 eq(message.senderParts()),
                 eq(connection.sender()),
                 optionalByteArrayEq(message.senderSignature())
         )).thenReturn(true);
+
+        var repSvc = mock(ReputationService.class);
+        when(node.reputationService()).thenReturn(repSvc);
     }
 
     @Test
@@ -136,8 +140,7 @@ class MessageHandlerProxyTest {
         proxy.handle(remoteInformation, message);
         assertArrayEquals(witnessSignature, message.witnessSignature().orElseThrow());
         verify(messageStore).add(message);
-        verify(senderRep).reward();
-        verify(reputationStore).save(senderRep);
+        verify(assessmentStore).save(eq(senderAsmt.updateStatus(Assessment.Status.REWARD)), any());
         verify(node).sendInternal(connection.receiver(), message, new TransportOptions());
     }
 
@@ -151,8 +154,7 @@ class MessageHandlerProxyTest {
         proxy.handle(remoteInformation, message);
         assertArrayEquals(witnessSignature, message.witnessSignature().orElseThrow());
         verify(messageStore).add(message);
-        verify(senderRep).strongPenalize();
-        verify(reputationStore).save(senderRep);
+        verify(assessmentStore).save(eq(senderAsmt.updateStatus(Assessment.Status.STRONG_PENALTY)), any());
         verify(node).sendInternal(connection.receiver(), message, new TransportOptions());
     }
 
@@ -174,10 +176,8 @@ class MessageHandlerProxyTest {
         )).thenReturn(true);
         proxy.handle(remoteInformation, message);
         verify(messageStore).add(message);
-        verify(senderRep).reward();
-        verify(witnessRep).reward();
-        verify(reputationStore).save(senderRep);
-        verify(reputationStore).save(witnessRep);
+        verify(assessmentStore).save(eq(senderAsmt.updateStatus(Assessment.Status.REWARD)), any());
+        verify(assessmentStore).save(eq(witnessAsmt.updateStatus(Assessment.Status.REWARD)), any());
     }
 
     @Test
@@ -187,9 +187,7 @@ class MessageHandlerProxyTest {
         when(node.checkSignature(message.witnessParts(), connection.sender(), message.witnessSignature())).thenReturn(false);
         proxy.handle(remoteInformation, message);
         verify(messageStore).add(message);
-        verifyNoInteractions(senderRep);
-        verify(witnessRep).strongPenalize();
-        verify(reputationStore).save(witnessRep);
+        verify(assessmentStore).save(eq(witnessAsmt.updateStatus(Assessment.Status.STRONG_PENALTY)), any());
     }
 
     @Test
@@ -218,10 +216,8 @@ class MessageHandlerProxyTest {
         )).thenReturn(false);
         proxy.handle(remoteInformation, message);
         verify(messageStore).add(message);
-        verify(senderRep).weakPenalize();
-        verify(witnessRep).weakPenalize();
-        verify(reputationStore).save(senderRep);
-        verify(reputationStore).save(witnessRep);
+        verify(assessmentStore).save(eq(senderAsmt.updateStatus(Assessment.Status.WEAK_PENALTY)), any());
+        verify(assessmentStore).save(eq(senderAsmt.updateStatus(Assessment.Status.WEAK_PENALTY)), any());
         verify(node).sendForPeer(sender, Endpoints.MESSAGE_FORWARD.name(), new MessageForward(summary, fwdSig), new TransportOptions());
     }
 

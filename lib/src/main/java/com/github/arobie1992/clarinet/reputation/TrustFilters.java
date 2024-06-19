@@ -3,7 +3,9 @@ package com.github.arobie1992.clarinet.reputation;
 import com.github.arobie1992.clarinet.peer.PeerId;
 
 import java.util.Collection;
+import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -34,16 +36,18 @@ public class TrustFilters {
         return values.stream().mapToDouble(i -> i).average().getAsDouble();
     }
 
-    public static Function<Stream<? extends Reputation>, Stream<PeerId>> minAndStandardDeviation(double minValue) {
-        return reputationStream -> {
-            var asList = reputationStream.toList();
-            if(asList.isEmpty()) {
+    public static BiFunction<Stream<? extends PeerId>, Function<PeerId, Double>, Stream<? extends PeerId>> minAndStandardDeviation(double minValue) {
+        return (peerIds, repFn) -> {
+            var peersAndRep = peerIds.collect(Collectors.toMap(p -> p, repFn));
+            if(peersAndRep.isEmpty()) {
                 return Stream.empty();
             }
-            var repValues = asList.stream().map(Reputation::value).toList();
-            var mean = mean(repValues);
-            var standardDeviation = standardDeviation(repValues);
-            return asList.stream().filter(rep -> rep.value() >= minValue && rep.value() >= mean - standardDeviation).map(Reputation::peerId);
+            var mean = mean(peersAndRep.values());
+            var standardDeviation = standardDeviation(peersAndRep.values());
+            return peersAndRep.keySet().stream().filter(p -> {
+                var rep = peersAndRep.get(p);
+                return rep >= minValue && rep >= mean - standardDeviation;
+            });
         };
     }
 

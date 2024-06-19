@@ -3,6 +3,7 @@ package com.github.arobie1992.clarinet.core;
 import com.github.arobie1992.clarinet.adt.None;
 import com.github.arobie1992.clarinet.message.MessageForward;
 import com.github.arobie1992.clarinet.peer.PeerId;
+import com.github.arobie1992.clarinet.reputation.Assessment;
 import com.github.arobie1992.clarinet.transport.RemoteInformation;
 import com.github.arobie1992.clarinet.transport.SendHandler;
 import org.slf4j.Logger;
@@ -56,12 +57,12 @@ class MessageForwardHandlerProxy implements SendHandler<MessageForward> {
 
             if(!node.checkSignatureHash(message.summary().hash(), witId, message.summary().witnessSignature())) {
                 // receivers should only ever send this if the witness signature is valid
-                var rep = node.reputationStore().find(recId);
-                rep.strongPenalize();
-                node.reputationStore().save(rep);
+                var assessment = node.assessmentStore().find(recId, message.summary().messageId());
+                node.assessmentStore().save(assessment.updateStatus(Assessment.Status.STRONG_PENALTY), node.reputationService()::update);
                 throw new HandlerException("for a message on connection " + connectionId + " that has invalid witness signature");
             }
 
+            // TODO need to review protocol and see where this stands
             // not currently using receiver signature because it doesn't contribute to the protocol,
             // but have it there in case it's helpful later on
 
@@ -72,9 +73,8 @@ class MessageForwardHandlerProxy implements SendHandler<MessageForward> {
 
             var hash = node.hash(storedMsg.get().witnessParts(), message.summary().hashAlgorithm());
             if(!Arrays.equals(hash, message.summary().hash())) {
-                var rep = node.reputationStore().find(witId);
-                rep.strongPenalize();
-                node.reputationStore().save(rep);
+                var assessment = node.assessmentStore().find(witId, message.summary().messageId());
+                node.assessmentStore().save(assessment.updateStatus(Assessment.Status.STRONG_PENALTY), node.reputationService()::update);
             }
             userHandler.handle(remoteInformation, message);
         } catch(HandlerException e) {

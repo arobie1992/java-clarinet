@@ -6,6 +6,7 @@ import com.github.arobie1992.clarinet.message.DataMessage;
 import com.github.arobie1992.clarinet.message.MessageForward;
 import com.github.arobie1992.clarinet.message.MessageSummary;
 import com.github.arobie1992.clarinet.peer.PeerId;
+import com.github.arobie1992.clarinet.reputation.Assessment;
 import com.github.arobie1992.clarinet.transport.RemoteInformation;
 import com.github.arobie1992.clarinet.transport.SendHandler;
 import com.github.arobie1992.clarinet.transport.TransportOptions;
@@ -64,13 +65,11 @@ class MessageHandlerProxy implements SendHandler<DataMessage> {
         message.setWitnessSignature(node.genSignature(message.witnessParts()));
         node.messageStore().add(message);
 
-        var rep = node.reputationStore().find(connection.sender());
-        if(node.checkSignature(message.senderParts(), connection.sender(), message.senderSignature())) {
-            rep.reward();
-        } else {
-            rep.strongPenalize();
-        }
-        node.reputationStore().save(rep);
+        var assessment = node.assessmentStore().find(connection.sender(), message.messageId());
+        var status = node.checkSignature(message.senderParts(), connection.sender(), message.senderSignature())
+                ? Assessment.Status.REWARD
+                : Assessment.Status.STRONG_PENALTY;
+        node.assessmentStore().save(assessment.updateStatus(status), node.reputationService()::update);
 
         userHandler.handle(remoteInformation, message);
         // TODO add ability for user to set transport options for handler
@@ -80,16 +79,15 @@ class MessageHandlerProxy implements SendHandler<DataMessage> {
     private void handleAsReceiver(RemoteInformation remoteInformation, Connection connection, PeerId witness, DataMessage message) throws JsonProcessingException {
         node.messageStore().add(message);
 
-        var witRep = node.reputationStore().find(witness);
-        // TODO have receiver forward message to sender if sender signature is invalid
+        var witAssessment = node.assessmentStore().find(witness, message.messageId());
         if(node.checkSignature(message.witnessParts(), witness, message.witnessSignature())) {
-            var sendRep = node.reputationStore().find(connection.sender());
+            var sendAssessment = node.assessmentStore().find(connection.sender(), message.messageId());
             if(node.checkSignature(message.senderParts(), connection.sender(), message.senderSignature())) {
-                witRep.reward();
-                sendRep.reward();
+                witAssessment = witAssessment.updateStatus(Assessment.Status.REWARD);
+                sendAssessment = sendAssessment.updateStatus(Assessment.Status.REWARD);
             } else {
-                witRep.weakPenalize();
-                sendRep.weakPenalize();
+                witAssessment = witAssessment.updateStatus(Assessment.Status.WEAK_PENALTY);
+                sendAssessment = sendAssessment.updateStatus(Assessment.Status.WEAK_PENALTY);
                 /* FIXME this isn't going to work in a real impl because the witness could've used a different hashing algorithm
                    but should work for this prototype; long term would probably be to have the nodes agree upon a hash algorithm
                    as part of the connection */
@@ -99,11 +97,11 @@ class MessageHandlerProxy implements SendHandler<DataMessage> {
                 var sender = node.peerStore().find(connection.sender()).orElseThrow(() -> new NoSuchPeerException(connection.sender()));
                 node.sendForPeer(sender, Endpoints.MESSAGE_FORWARD.name(), new MessageForward(summary, sig), new TransportOptions());
             }
-            node.reputationStore().save(sendRep);
+            node.assessmentStore().save(sendAssessment, node.reputationService()::update);
         } else {
-            witRep.strongPenalize();
+            witAssessment = witAssessment.updateStatus(Assessment.Status.STRONG_PENALTY);
         }
-        node.reputationStore().save(witRep);
+        node.assessmentStore().save(witAssessment, node.reputationService()::update);
 
         userHandler.handle(remoteInformation, message);
     }
