@@ -25,12 +25,55 @@ public record Assessment(PeerId peerId, MessageId messageId, Status status) {
     }
 
     /**
-     * The possible status values for an assessment. Each has a priority conforming to
+     * The possible status values for an assessment. Each has a priority conforming to how it should permit transitions.
+     * The order of priorities is {@link Status#STRONG_PENALTY} > {@link Status#WEAK_PENALTY} >{@link Status#REWARD} >
+     * {@link Status#NONE}. The exact values of the priorities are not part of the public API and should not be relied
+     * upon, but this relative ordering is stable.
      */
     public enum Status {
+        /**
+         * No assessment has been made for the given message for the peer.
+         * <p>
+         * This is the default value and does not affect reputation.
+         */
         NONE(0),
+        /**
+         * The message has been deemed to conform to Clarinet conventions.
+         * <p>
+         * This status denotes that the reputation for the peer should improve, or if at the maximum value, stay the
+         * same.
+         */
         REWARD(1),
+        /**
+         * The message has been deemed to not conform to Clarinet conventions, but the source of aberration is unclear.
+         * <p>
+         * This status denotes that the reputation for the peer should suffer a small decrease, or if at the minimum
+         * value, stay the same. What defines small is entirely up to implementors, but must be less than
+         * {@link Status#STRONG_PENALTY}. More formally:
+         * <pre>
+         *     given reputation(p1) == reputation(p2)
+         *         and reputation(p1) > val(weakPen)   // i.e. the decrease will not reduce the reputation to 0
+         *     if weakPen(p1)
+         *         and strongPen(p2)
+         *     then reputation(p1) > reputation(p2)
+         * </pre>
+         */
         WEAK_PENALTY(2),
+        /**
+         * The message has been deemed to not conform to Clarinet conventions, and the source of aberration can be
+         * definitively determined.
+         * <p>
+         * This status denotes that the reputation for the peer should suffer a large decrease, or if at the minimum
+         * value, stay the same. What defines large is entirely up to implementors, but must be greater than
+         * {@link Status#WEAK_PENALTY}. More formally:
+         * <pre>
+         *     given reputation(p1) == reputation(p2)
+         *         and reputation(p1) > val(weakPen)   // i.e. the decrease will not reduce the reputation to 0
+         *     if weakPen(p1)
+         *         and strongPen(p2)
+         *     then reputation(p1) > reputation(p2)
+         * </pre>
+         */
         STRONG_PENALTY(3);
 
         private final int value;

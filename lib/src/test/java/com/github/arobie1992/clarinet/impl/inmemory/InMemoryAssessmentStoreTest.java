@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -21,6 +20,7 @@ import static org.mockito.Mockito.*;
 
 class InMemoryAssessmentStoreTest {
 
+    private final AssessmentStore.ReputationCallback noOp = (a, b) -> {};
     private final PeerId peerId = PeerUtils.senderId();
     private final MessageId messageId = new MessageId(ConnectionId.random(), 0);
     private InMemoryAssessmentStore store;
@@ -53,7 +53,7 @@ class InMemoryAssessmentStoreTest {
     @Test
     void testSaveNotPersist() {
         var assessment = new Assessment(peerId, messageId, Assessment.Status.REWARD);
-        assertTrue(store.save(assessment));
+        assertTrue(store.save(assessment, noOp));
         assertFalse(store.save(new Assessment(peerId, messageId, Assessment.Status.NONE), callback));
         verify(callback, never()).update(any(), any());
         assertEquals(assessment, store.find(peerId, messageId));
@@ -79,21 +79,5 @@ class InMemoryAssessmentStoreTest {
     }
 
     private record Pair(Assessment.Status existing, Assessment.Status updated) {}
-
-    @Test
-    void testFindAll() {
-        var peerId2 = PeerUtils.receiverId();
-        assertNotEquals(peerId, peerId2);
-        var messageId2 = new MessageId(ConnectionId.random(), 1);
-        var assessment1 = new Assessment(peerId, messageId, Assessment.Status.NONE);
-        var assessment2 = new Assessment(peerId, messageId2, Assessment.Status.STRONG_PENALTY);
-        var assessment3 = new Assessment(peerId2, messageId2, Assessment.Status.WEAK_PENALTY);
-        assertTrue(store.save(assessment1));
-        assertTrue(store.save(assessment2));
-        assertTrue(store.save(assessment3));
-        var found = store.findAll(peerId).toList();
-        assertTrue(found.containsAll(List.of(assessment1, assessment2)));
-        assertFalse(found.contains(assessment3));
-    }
 
 }

@@ -307,8 +307,7 @@ class SimpleNode implements Node {
     // TODO change this to processQueryResult or something else that would allow for query forwarding
     @Override
     public boolean updateAssessment(QueryResult queryResult) {
-        var existing = assessmentStore.find(queryResult.queriedPeer(), queryResult.queriedMessage());
-        Assessment updated;
+        var assessment = assessmentStore.find(queryResult.queriedPeer(), queryResult.queriedMessage());
         var resp = queryResult.queryResponse();
         List<PeerId> participants;
         try(var ref = connectionStore.findForRead(queryResult.queriedMessage().connectionId())) {
@@ -320,26 +319,25 @@ class SimpleNode implements Node {
         var messageOpt = messageStore.find(queryResult.queriedMessage());
 
         if(invalidSignature(resp, queryResult.queriedPeer())) {
-            updated = existing.updateStatus(Assessment.Status.STRONG_PENALTY);
+            assessment = assessment.updateStatus(Assessment.Status.STRONG_PENALTY);
         } else if(!participants.contains(queryResult.queriedPeer())) {
             return false;
         } else if(messageOpt.isEmpty()) {
             return false;
         } else if(!responseMatches(messageOpt.get(), queryResult.queryResponse())) {
             if(directCommunication(queryResult.queriedPeer(), participants)) {
-                updated = existing.updateStatus(Assessment.Status.STRONG_PENALTY);
+                assessment = assessment.updateStatus(Assessment.Status.STRONG_PENALTY);
             } else {
-                updated = existing.updateStatus(Assessment.Status.WEAK_PENALTY);
+                assessment = assessment.updateStatus(Assessment.Status.WEAK_PENALTY);
                 var otherParticipant = getOtherParticipant(participants, queryResult.queriedPeer());
                 var otherAssessment = assessmentStore.find(otherParticipant, queryResult.queriedMessage());
                 var otherUpdated = otherAssessment.updateStatus(Assessment.Status.WEAK_PENALTY);
                 assessmentStore.save(otherUpdated, reputationService::update);
             }
         } else {
-            updated = existing.updateStatus(Assessment.Status.REWARD);
+            assessment = assessment.updateStatus(Assessment.Status.REWARD);
         }
-        Objects.requireNonNull(updated, "updated should never be null by this point");
-        assessmentStore.save(updated, reputationService::update);
+        assessmentStore.save(assessment, reputationService::update);
         return true;
     }
 

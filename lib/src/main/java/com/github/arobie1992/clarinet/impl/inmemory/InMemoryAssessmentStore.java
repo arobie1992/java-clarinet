@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Stream;
 
 public class InMemoryAssessmentStore implements AssessmentStore {
 
@@ -47,8 +46,4 @@ public class InMemoryAssessmentStore implements AssessmentStore {
         return assessments.computeIfAbsent(new ID(peerId, messageId), k -> new Assessment(peerId, messageId, Assessment.Status.NONE));
     }
 
-    @Override
-    public Stream<Assessment> findAll(PeerId peerId) {
-        return assessments.entrySet().stream().filter(entry -> entry.getKey().peerId().equals(peerId)).map(Map.Entry::getValue);
-    }
 }

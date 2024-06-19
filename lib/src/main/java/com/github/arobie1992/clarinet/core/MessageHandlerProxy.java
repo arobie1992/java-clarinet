@@ -80,7 +80,6 @@ class MessageHandlerProxy implements SendHandler<DataMessage> {
         node.messageStore().add(message);
 
         var witAssessment = node.assessmentStore().find(witness, message.messageId());
-        // TODO have receiver forward message to sender if sender signature is invalid
         if(node.checkSignature(message.witnessParts(), witness, message.witnessSignature())) {
             var sendAssessment = node.assessmentStore().find(connection.sender(), message.messageId());
             if(node.checkSignature(message.senderParts(), connection.sender(), message.senderSignature())) {

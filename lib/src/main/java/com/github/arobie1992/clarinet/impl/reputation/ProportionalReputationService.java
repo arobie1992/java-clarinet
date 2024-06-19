@@ -16,9 +16,9 @@ public class ProportionalReputationService implements ReputationService {
     private final Map<PeerId, Rep> reps = new ConcurrentHashMap<>();
 
     private static final Map<Assessment.Status, Delta> deltas = Collections.unmodifiableMap(new EnumMap<>(Map.of(
-            NONE, new Delta(0, 0),
-            REWARD, new Delta(1, 1),
-            WEAK_PENALTY, new Delta(0, 1),
+            NONE          , new Delta(0, 0),
+            REWARD        , new Delta(1, 1),
+            WEAK_PENALTY  , new Delta(0, 1),
             STRONG_PENALTY, new Delta(0, 3)
     )));
 
@@ -54,21 +54,21 @@ public class ProportionalReputationService implements ReputationService {
     private record Delta(double good, double total) {}
 
     private record Rep(double good, double total) {
-        public Rep {
+        private Rep {
             if(good < 1 || total < 1) {
                 throw new IllegalArgumentException("Reputation cannot be updated with given existing and updated values");
             }
         }
-        public Rep() {
+        private Rep() {
             this(1,1);
         }
-        public Rep add(Delta delta) {
+        private Rep add(Delta delta) {
             return new Rep(good + delta.good, total + delta.total);
         }
-        public Rep sub(Delta delta) {
+        private Rep sub(Delta delta) {
             return new Rep(good - delta.good, total - delta.total);
         }
-        public double value() {
+        private double value() {
             return good/total;
         }
     }
