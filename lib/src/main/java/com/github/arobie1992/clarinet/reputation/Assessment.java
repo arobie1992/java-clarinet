@@ -40,15 +40,14 @@ public record Assessment(PeerId peerId, MessageId messageId, Status status) {
         /**
          * The message has been deemed to conform to Clarinet conventions.
          * <p>
-         * This status denotes that the reputation for the peer should improve, or if at the maximum value, stay the
-         * same.
+         * This status denotes that the reputation for the peer should improve up to, but not past, the maximum value.
          */
         REWARD(1),
         /**
          * The message has been deemed to not conform to Clarinet conventions, but the source of aberration is unclear.
          * <p>
-         * This status denotes that the reputation for the peer should suffer a small decrease, or if at the minimum
-         * value, stay the same. What defines small is entirely up to implementors, but must be less than
+         * This status denotes that the reputation for the peer should suffer a small decrease, down two but not past
+         * the minimum value. What defines small is entirely up to implementors, but must be less than
          * {@link Status#STRONG_PENALTY}. More formally:
          * <pre>
          *     given reputation(p1) == reputation(p2)
@@ -63,8 +62,8 @@ public record Assessment(PeerId peerId, MessageId messageId, Status status) {
          * The message has been deemed to not conform to Clarinet conventions, and the source of aberration can be
          * definitively determined.
          * <p>
-         * This status denotes that the reputation for the peer should suffer a large decrease, or if at the minimum
-         * value, stay the same. What defines large is entirely up to implementors, but must be greater than
+         * This status denotes that the reputation for the peer should suffer a large decrease down to but not past
+         * the minimum value. What defines large is entirely up to implementors, but must be greater than
          * {@link Status#WEAK_PENALTY}. More formally:
          * <pre>
          *     given reputation(p1) == reputation(p2)
