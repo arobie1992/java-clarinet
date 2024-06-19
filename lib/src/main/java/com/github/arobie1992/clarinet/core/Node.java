@@ -110,9 +110,13 @@ public interface Node {
 
     void removePeersRequestHandler();
 
-    void addMessageHandler(SendHandler<DataMessage> messageHandler);
+    void addWitnessHandler(SendHandler<DataMessage> witnessHandler);
 
-    void removeMessageHandler();
+    void removeWitnessHandler();
+
+    void addReceiveHandler(SendHandler<DataMessage> messageHandler);
+
+    void removeReceiveHandler();
 
     void addKeysRequestHandler(ExchangeHandler<KeysRequest, KeysResponse> keysRequestHandler);
 

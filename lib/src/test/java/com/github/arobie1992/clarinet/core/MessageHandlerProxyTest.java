@@ -31,7 +31,8 @@ class MessageHandlerProxyTest {
     private final byte[] witnessSignature = {45};
 
     private DataMessage message;
-    private SendHandler<DataMessage> userHandler;
+    private SendHandler<DataMessage> witnessHandler;
+    private SendHandler<DataMessage> receiveHandler;
     private ConnectionStore connectionStore;
     private SimpleNode node;
     private MessageHandlerProxy proxy;
@@ -48,10 +49,12 @@ class MessageHandlerProxyTest {
         message = new DataMessage(new MessageId(ConnectionId.random(), 0), new byte[]{77, 50, 126});
         message.setSenderSignature(senderSignature);
         //noinspection unchecked
-        userHandler = (SendHandler<DataMessage>) mock(SendHandler.class);
+        witnessHandler = (SendHandler<DataMessage>) mock(SendHandler.class);
+        //noinspection unchecked
+        receiveHandler = (SendHandler<DataMessage>) mock(SendHandler.class);
         connectionStore = mock(ConnectionStore.class);
         node = mock(SimpleNode.class);
-        proxy = new MessageHandlerProxy(null, connectionStore, node);
+        proxy = new MessageHandlerProxy(null, null, connectionStore, node);
 
         connection = new ConnectionImpl(message.messageId().connectionId(), PeerUtils.senderId(), PeerUtils.receiverId(), Connection.Status.OPEN);
         // this gets thrown away after each test so it should be fine
@@ -90,12 +93,12 @@ class MessageHandlerProxyTest {
 
     @Test
     void testNullConnectionStore() {
-        assertThrows(NullPointerException.class, () -> new MessageHandlerProxy(userHandler, null, node));
+        assertThrows(NullPointerException.class, () -> new MessageHandlerProxy(witnessHandler, receiveHandler, null, node));
     }
 
     @Test
     void testNullNode() {
-        assertThrows(NullPointerException.class, () -> new MessageHandlerProxy(userHandler, connectionStore, null));
+        assertThrows(NullPointerException.class, () -> new MessageHandlerProxy(witnessHandler, receiveHandler, connectionStore, null));
     }
 
     @Test
@@ -159,10 +162,10 @@ class MessageHandlerProxyTest {
     }
 
     @Test
-    void testWitnessUserHandlerCalled() {
-        proxy = new MessageHandlerProxy(userHandler, connectionStore, node);
+    void testUserWitnessHandlerCalled() {
+        proxy = new MessageHandlerProxy(witnessHandler, receiveHandler, connectionStore, node);
         proxy.handle(remoteInformation, message);
-        verify(userHandler).handle(remoteInformation, message);
+        verify(witnessHandler).handle(remoteInformation, message);
     }
 
     @Test
@@ -222,11 +225,11 @@ class MessageHandlerProxyTest {
     }
 
     @Test
-    void testReceiverUserHandlerCalled() {
+    void testUserReceiveHandlerCalled() {
         when(node.id()).thenReturn(connection.receiver());
-        proxy = new MessageHandlerProxy(userHandler, connectionStore, node);
+        proxy = new MessageHandlerProxy(witnessHandler, receiveHandler, connectionStore, node);
         proxy.handle(remoteInformation, message);
-        verify(userHandler).handle(remoteInformation, message);
+        verify(receiveHandler).handle(remoteInformation, message);
     }
 
 }

@@ -47,6 +47,9 @@ class SimpleNode implements Node {
     private final KeyStore keyStore;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    private SendHandler<DataMessage> witnessHandler;
+    private SendHandler<DataMessage> receiveHandler;
+
     SimpleNode(Builder builder) {
         this.id = Objects.requireNonNull(builder.id);
         this.peerStore = Objects.requireNonNull(builder.peerStore);
@@ -62,7 +65,12 @@ class SimpleNode implements Node {
                 Endpoints.WITNESS_NOTIFICATION.name(),
                 new WitnessNotificationHandlerProxy(builder.witnessNotificationHandler, connectionStore, this)
         );
-        this.transport.addInternal(Endpoints.MESSAGE.name(), new MessageHandlerProxy(builder.messageHandler, connectionStore, this));
+        this.witnessHandler = builder.witnessHandler;
+        this.receiveHandler = builder.receiveHandler;
+        this.transport.addInternal(
+                Endpoints.MESSAGE.name(),
+                new MessageHandlerProxy(witnessHandler, receiveHandler, connectionStore, this)
+        );
         this.transport.addInternal(Endpoints.REQUEST_PEERS.name(), new PeersRequestHandlerProxy(builder.peersRequestHandler, this));
         this.transport.addInternal(Endpoints.REQUEST_KEYS.name(), new KeysRequestHandlerProxy(builder.keysRequestHandler, this));
         this.transport.addInternal(Endpoints.QUERY.name(), new QueryHandlerProxy(builder.queryHandler, this));
@@ -524,13 +532,39 @@ class SimpleNode implements Node {
     }
 
     @Override
-    public void addMessageHandler(SendHandler<DataMessage> messageHandler) {
-        this.transport.addInternal(Endpoints.MESSAGE.name(), new MessageHandlerProxy(messageHandler, connectionStore, this));
+    public void addWitnessHandler(SendHandler<DataMessage> witnessHandler) {
+        this.witnessHandler = witnessHandler;
+        this.transport.addInternal(
+                Endpoints.MESSAGE.name(),
+                new MessageHandlerProxy(this.witnessHandler, receiveHandler, connectionStore, this)
+        );
     }
 
     @Override
-    public void removeMessageHandler() {
-        this.transport.addInternal(Endpoints.MESSAGE.name(), new MessageHandlerProxy(null, connectionStore, this));
+    public void removeWitnessHandler() {
+        this.witnessHandler = null;
+        this.transport.addInternal(
+                Endpoints.MESSAGE.name(),
+                new MessageHandlerProxy(null, receiveHandler, connectionStore, this)
+        );
+    }
+
+    @Override
+    public void addReceiveHandler(SendHandler<DataMessage> receiveHandler) {
+        this.receiveHandler = receiveHandler;
+        this.transport.addInternal(
+                Endpoints.MESSAGE.name(),
+                new MessageHandlerProxy(witnessHandler, this.receiveHandler, connectionStore, this)
+        );
+    }
+
+    @Override
+    public void removeReceiveHandler() {
+        this.receiveHandler = null;
+        this.transport.addInternal(
+                Endpoints.MESSAGE.name(),
+                new MessageHandlerProxy(witnessHandler, null, connectionStore, this)
+        );
     }
 
     @Override
@@ -591,7 +625,8 @@ class SimpleNode implements Node {
         private SendHandler<WitnessNotification> witnessNotificationHandler;
         private MessageStore messageStore;
         private KeyStore keyStore;
-        SendHandler<DataMessage> messageHandler;
+        SendHandler<DataMessage> witnessHandler;
+        SendHandler<DataMessage> receiveHandler;
         private ExchangeHandler<PeersRequest, PeersResponse> peersRequestHandler;
         private ExchangeHandler<KeysRequest, KeysResponse> keysRequestHandler;
         private ExchangeHandler<QueryRequest, QueryResponse> queryHandler;
@@ -665,8 +700,14 @@ class SimpleNode implements Node {
         }
 
         @Override
-        public NodeBuilder messageHandler(SendHandler<DataMessage> messageHandler) {
-            this.messageHandler = messageHandler;
+        public NodeBuilder witnessHandler(SendHandler<DataMessage> witnessHandler) {
+            this.witnessHandler = witnessHandler;
+            return this;
+        }
+
+        @Override
+        public NodeBuilder receiveHandler(SendHandler<DataMessage> receiveHandler) {
+            this.receiveHandler = receiveHandler;
             return this;
         }
 

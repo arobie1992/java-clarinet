@@ -4,7 +4,10 @@ public class MaliciousNode extends SimpleNode {
     public boolean invalidSendSigOnMessage = true;
     public MaliciousNode(MaliciuosNodeBuilder builder) {
         super(builder);
-        transport.addInternal(Endpoints.MESSAGE.name(), new MaliciousMessageHandlerProxy(builder.messageHandler, connectionStore, this));
+        transport.addInternal(
+                Endpoints.MESSAGE.name(),
+                new MaliciousMessageHandlerProxy(builder.witnessHandler, builder.receiveHandler, connectionStore, this)
+        );
     }
 
     public static class MaliciuosNodeBuilder extends Builder {

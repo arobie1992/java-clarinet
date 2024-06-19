@@ -19,12 +19,14 @@ class MessageHandlerProxy implements SendHandler<DataMessage> {
     private static final None<Void> THE_NONE = new None<>();
     private static final String HASH_ALG = "SHA-256";
 
-    private final SendHandler<DataMessage> userHandler;
+    private final SendHandler<DataMessage> userWitnessHandler;
+    private final SendHandler<DataMessage> userReceiveHandler;
     private final ConnectionStore connectionStore;
     private final SimpleNode node;
 
-    MessageHandlerProxy(SendHandler<DataMessage> userHandler, ConnectionStore connectionStore, SimpleNode node) {
-        this.userHandler = userHandler == null ? DEFAULT_HANDLER : userHandler;
+    MessageHandlerProxy(SendHandler<DataMessage> userWitnessHandler, SendHandler<DataMessage> userReceiveHandler, ConnectionStore connectionStore, SimpleNode node) {
+        this.userWitnessHandler = userWitnessHandler == null ? DEFAULT_HANDLER : userWitnessHandler;
+        this.userReceiveHandler = userReceiveHandler == null ? DEFAULT_HANDLER : userReceiveHandler;
         this.connectionStore = Objects.requireNonNull(connectionStore);
         this.node = Objects.requireNonNull(node);
     }
@@ -71,7 +73,7 @@ class MessageHandlerProxy implements SendHandler<DataMessage> {
                 : Assessment.Status.STRONG_PENALTY;
         node.assessmentStore().save(assessment.updateStatus(status), node.reputationService()::update);
 
-        userHandler.handle(remoteInformation, message);
+        userWitnessHandler.handle(remoteInformation, message);
         // TODO add ability for user to set transport options for handler
         node.sendInternal(connection.receiver(), message, new TransportOptions());
     }
@@ -103,12 +105,12 @@ class MessageHandlerProxy implements SendHandler<DataMessage> {
         }
         node.assessmentStore().save(witAssessment, node.reputationService()::update);
 
-        userHandler.handle(remoteInformation, message);
+        userReceiveHandler.handle(remoteInformation, message);
     }
 
     @Override
     public Class<DataMessage> inputType() {
-        return userHandler.inputType();
+        return userReceiveHandler.inputType();
     }
 
     private static final SendHandler<DataMessage> DEFAULT_HANDLER = new SendHandler<>() {

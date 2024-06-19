@@ -9,8 +9,13 @@ public class MaliciousMessageHandlerProxy extends MessageHandlerProxy {
     private final ConnectionStore connectionStore;
     private final MaliciousNode node;
 
-    MaliciousMessageHandlerProxy(SendHandler<DataMessage> userHandler, ConnectionStore connectionStore, MaliciousNode node) {
-        super(userHandler, connectionStore, node);
+    MaliciousMessageHandlerProxy(
+            SendHandler<DataMessage> userWitnessHandler,
+            SendHandler<DataMessage> userReceiveHandler,
+            ConnectionStore connectionStore,
+            MaliciousNode node
+    ) {
+        super(userWitnessHandler, userReceiveHandler, connectionStore, node);
         this.connectionStore = connectionStore;
         this.node = node;
     }

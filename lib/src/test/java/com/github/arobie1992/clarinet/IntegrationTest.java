@@ -154,7 +154,7 @@ class IntegrationTest {
         sender.peerStore().save(asPeer(witness));
         receiver.addWitnessNotificationHandler(new SendLatchHandler<>(witnessNotificationLatch, WitnessNotification.class));
         witness.addWitnessRequestHandler(new RetrieveAddrsWitnessHandler(witness));
-        receiver.addMessageHandler(new SendLatchHandler<>(messageLatch, DataMessage.class));
+        receiver.addReceiveHandler(new SendLatchHandler<>(messageLatch, DataMessage.class));
 
         // connection creation
         var connectionId = sender.connect(receiver.id(), new ConnectionOptions(), TransportUtils.defaultOptions());
@@ -257,7 +257,7 @@ class IntegrationTest {
         sender.peerStore().save(asPeer(witness));
         receiver.addWitnessNotificationHandler(new SendLatchHandler<>(witnessNotificationLatch, WitnessNotification.class));
         witness.addWitnessRequestHandler(new RetrieveAddrsWitnessHandler(witness));
-        receiver.addMessageHandler(new SendLatchHandler<>(messageLatch, DataMessage.class));
+        receiver.addReceiveHandler(new SendLatchHandler<>(messageLatch, DataMessage.class));
 
         // connection creation
         var connectionId = sender.connect(receiver.id(), new ConnectionOptions(), TransportUtils.defaultOptions());

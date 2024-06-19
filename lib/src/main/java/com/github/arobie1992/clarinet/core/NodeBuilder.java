@@ -68,14 +68,18 @@ public interface NodeBuilder {
     NodeBuilder witnessNotificationHandler(SendHandler<WitnessNotification> witnessNotificationHandler);
 
     /**
-     * User-defined behavior for messages. This handler is called both when a node serves as the receiver and as the
-     * witness in a connection.
-     * <p>
-     * Users do not need to update the connection themselves.
-     * @param messageHandler The handler implementing the user-desired behavior.
+     * User-defined behavior for messages. This handler is called when a node serves as the witness in a connection.
+     * @param witnessHandler The handler implementing the user-desired behavior.
      * @return {@code this} builder for fluent building.
      */
-    NodeBuilder messageHandler(SendHandler<DataMessage> messageHandler);
+    NodeBuilder witnessHandler(SendHandler<DataMessage> witnessHandler);
+
+    /**
+     * User-defined behavior for messages. This handler is called when a node serves as the receiver in a connection.
+     * @param receiveHandler The handler implementing the user-desired behavior.
+     * @return {@code this} builder for fluent building.
+     */
+    NodeBuilder receiveHandler(SendHandler<DataMessage> receiveHandler);
 
     /**
      * User behavior for how to respond to a {@link PeersRequest}.
