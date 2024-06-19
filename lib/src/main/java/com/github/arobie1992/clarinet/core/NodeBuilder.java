@@ -4,12 +4,13 @@ import com.github.arobie1992.clarinet.crypto.KeyStore;
 import com.github.arobie1992.clarinet.message.*;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
-import com.github.arobie1992.clarinet.reputation.Reputation;
-import com.github.arobie1992.clarinet.reputation.ReputationStore;
+import com.github.arobie1992.clarinet.reputation.AssessmentStore;
+import com.github.arobie1992.clarinet.reputation.ReputationService;
 import com.github.arobie1992.clarinet.transport.ExchangeHandler;
 import com.github.arobie1992.clarinet.transport.SendHandler;
 import com.github.arobie1992.clarinet.transport.Transport;
 
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
@@ -28,10 +29,10 @@ public interface NodeBuilder {
      * @return {@code this} builder for fluent building.
      */
     NodeBuilder transport(Supplier<Transport> transportFactory);
-    NodeBuilder reputationStore(ReputationStore reputationStore);
+    NodeBuilder assessmentStore(AssessmentStore assessmentStore);
     NodeBuilder messageStore(MessageStore messageStore);
     NodeBuilder keyStore(KeyStore keyStore);
-    NodeBuilder trustFilter(Function<Stream<? extends Reputation>, Stream<PeerId>> trustFunction);
+    NodeBuilder trustFilter(BiFunction<Stream<? extends PeerId>, Function<PeerId, Double>, Stream<? extends PeerId>> trustFunction);
 
     /**
      * User-defined behavior for determining whether to accept a connection.
@@ -43,6 +44,8 @@ public interface NodeBuilder {
      * @return {@code this} builder for fluent building.
      */
     NodeBuilder connectHandler(ExchangeHandler<ConnectRequest, ConnectResponse> connectHandler);
+
+    NodeBuilder reputationService(ReputationService reputationService);
 
     /**
      * User-defined behavior for determining whether to be witness to a connection.

@@ -4,7 +4,8 @@ import com.github.arobie1992.clarinet.crypto.KeyStore;
 import com.github.arobie1992.clarinet.message.*;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
-import com.github.arobie1992.clarinet.reputation.ReputationStore;
+import com.github.arobie1992.clarinet.reputation.AssessmentStore;
+import com.github.arobie1992.clarinet.reputation.ReputationService;
 import com.github.arobie1992.clarinet.transport.ExchangeHandler;
 import com.github.arobie1992.clarinet.transport.SendHandler;
 import com.github.arobie1992.clarinet.transport.Transport;
@@ -15,7 +16,9 @@ public interface Node {
     PeerStore peerStore();
     Transport transport();
 
-    ReputationStore reputationStore();
+    AssessmentStore assessmentStore();
+
+    ReputationService reputationService();
 
     Connection.ReadableReference findConnection(ConnectionId connectionId);
 
@@ -48,7 +51,7 @@ public interface Node {
      * Query the given peer for the message and check if it matches the expectation.
      * <p>
      * This method does not make any reputation updates. If you wish to perform a reputation update based on the query
-     * result, use {@link Node#updateReputation(QueryResult)}. This is done to allow for flexibility in querying that
+     * result, use {@link Node#updateAssessment(QueryResult)}. This is done to allow for flexibility in querying that
      * falls outside the core Clarinet semantics. Some examples are:
      * <ul>
      *     <li>Querying nodes that were not participants in the connection.</li>
@@ -85,7 +88,7 @@ public interface Node {
      * @param queryResult The {@link QueryResult} to determine how reputation should be updated.
      * @return {@code true} if a reputation update is performed; {@code false} otherwise.
      */
-    boolean updateReputation(QueryResult queryResult);
+    boolean updateAssessment(QueryResult queryResult);
 
     PeersResponse requestPeers(PeerId requestee, PeersRequest request, TransportOptions transportOptions);
 

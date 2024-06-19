@@ -2,8 +2,9 @@ package com.github.arobie1992.clarinet.core;
 
 import com.github.arobie1992.clarinet.message.*;
 import com.github.arobie1992.clarinet.peer.Peer;
-import com.github.arobie1992.clarinet.reputation.Reputation;
-import com.github.arobie1992.clarinet.reputation.ReputationStore;
+import com.github.arobie1992.clarinet.reputation.Assessment;
+import com.github.arobie1992.clarinet.reputation.AssessmentStore;
+import com.github.arobie1992.clarinet.reputation.ReputationService;
 import com.github.arobie1992.clarinet.testutils.AddressUtils;
 import com.github.arobie1992.clarinet.testutils.PeerUtils;
 import com.github.arobie1992.clarinet.transport.RemoteInformation;
@@ -38,9 +39,9 @@ class MessageForwardHandlerProxyTest {
     private ConnectionStore connectionStore;
     private SimpleNode node;
     private MessageForwardHandlerProxy proxy;
-    private ReputationStore reputationStore;
-    private Reputation recRep;
-    private Reputation witRep;
+    private AssessmentStore assessmentStore;
+    private Assessment recAsmt;
+    private Assessment witAsmt;
     private MessageStore messageStore;
     private DataMessage message;
 
@@ -52,8 +53,8 @@ class MessageForwardHandlerProxyTest {
         node = mock(SimpleNode.class);
         proxy = new MessageForwardHandlerProxy(userHandler, connectionStore, node);
 
-        reputationStore = mock(ReputationStore.class);
-        when(node.reputationStore()).thenReturn(reputationStore);
+        assessmentStore = mock(AssessmentStore.class);
+        when(node.assessmentStore()).thenReturn(assessmentStore);
         var connection = new ConnectionImpl(
                 forward.summary().messageId().connectionId(),
                 PeerUtils.senderId(),
@@ -82,18 +83,21 @@ class MessageForwardHandlerProxyTest {
         var witnessParts = mock(DataMessage.WitnessParts.class);
         when(message.witnessParts()).thenReturn(witnessParts);
 
-        recRep = mock(Reputation.class);
-        when(reputationStore.find(PeerUtils.receiverId())).thenReturn(recRep);
-        witRep = mock(Reputation.class);
-        when(reputationStore.find(PeerUtils.witnessId())).thenReturn(witRep);
+        recAsmt = new Assessment(PeerUtils.receiverId(), forward.summary().messageId(), Assessment.Status.NONE);
+        when(assessmentStore.find(PeerUtils.receiverId(), forward.summary().messageId())).thenReturn(recAsmt);
+        witAsmt = new Assessment(PeerUtils.witnessId(), forward.summary().messageId(), Assessment.Status.NONE);
+        when(assessmentStore.find(PeerUtils.witnessId(), forward.summary().messageId())).thenReturn(witAsmt);
         when(node.hash(message.witnessParts(), forward.summary().hashAlgorithm())).thenReturn(forward.summary().hash());
+
+        var repService = mock(ReputationService.class);
+        when(node.reputationService()).thenReturn(repService);
     }
 
     @Test
     void testNoConnection() {
         when(connectionStore.findForRead(forward.summary().messageId().connectionId())).thenReturn(new Connection.Absent());
         proxy.handle(remoteInformation, forward);
-        verifyNoInteractions(reputationStore, userHandler);
+        verifyNoInteractions(assessmentStore, userHandler);
     }
 
     @Test
@@ -106,14 +110,14 @@ class MessageForwardHandlerProxyTest {
         );
         when(connectionStore.findForRead(forward.summary().messageId().connectionId())).thenReturn(new Connection.Readable(connection));
         proxy.handle(remoteInformation, forward);
-        verifyNoInteractions(reputationStore, userHandler);
+        verifyNoInteractions(assessmentStore, userHandler);
     }
 
     @Test
     void testNotSender() {
         when(node.id()).thenReturn(PeerUtils.witnessId());
         proxy.handle(remoteInformation, forward);
-        verifyNoInteractions(reputationStore, userHandler);
+        verifyNoInteractions(assessmentStore, userHandler);
     }
 
     @Test
@@ -127,7 +131,7 @@ class MessageForwardHandlerProxyTest {
         when(connectionStore.findForRead(forward.summary().messageId().connectionId())).thenReturn(new Connection.Readable(connection));
         assertTrue(connection.witness().isEmpty());
         proxy.handle(remoteInformation, forward);
-        verifyNoInteractions(reputationStore, userHandler);
+        verifyNoInteractions(assessmentStore, userHandler);
     }
 
     @Test
@@ -139,15 +143,14 @@ class MessageForwardHandlerProxyTest {
         ).thenReturn(false);
         proxy.handle(remoteInformation, forward);
         verifyNoInteractions(userHandler);
-        verify(recRep).strongPenalize();
-        verify(reputationStore).save(recRep);
+        verify(assessmentStore).save(eq(recAsmt.updateStatus(Assessment.Status.STRONG_PENALTY)), any());
     }
 
     @Test
     void testNoMessage() {
         when(messageStore.find(forward.summary().messageId())).thenReturn(Optional.empty());
         proxy.handle(remoteInformation, forward);
-        verifyNoInteractions(reputationStore, userHandler);
+        verifyNoInteractions(assessmentStore, userHandler);
     }
 
     @Test
@@ -156,14 +159,13 @@ class MessageForwardHandlerProxyTest {
         assertFalse(Arrays.equals(forward.summary().hash(), hash));
         when(node.hash(message.witnessParts(), forward.summary().hashAlgorithm())).thenReturn(hash);
         proxy.handle(remoteInformation, forward);
-        verify(witRep).strongPenalize();
-        verify(reputationStore).save(witRep);
+        verify(assessmentStore).save(eq(witAsmt.updateStatus(Assessment.Status.STRONG_PENALTY)), any());
     }
 
     @Test
     void testHashCorrect() {
         proxy.handle(remoteInformation, forward);
-        verifyNoInteractions(reputationStore);
+        verifyNoInteractions(assessmentStore);
         verify(userHandler).handle(remoteInformation, forward);
     }
 
@@ -171,7 +173,7 @@ class MessageForwardHandlerProxyTest {
     void testHashCorrectDefaultHandler() {
         proxy = new MessageForwardHandlerProxy(null, connectionStore, node);
         proxy.handle(remoteInformation, forward);
-        verifyNoInteractions(reputationStore);
+        verifyNoInteractions(assessmentStore);
     }
 
     @Test

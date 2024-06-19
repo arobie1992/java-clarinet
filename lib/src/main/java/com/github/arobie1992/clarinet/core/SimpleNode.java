@@ -11,8 +11,9 @@ import com.github.arobie1992.clarinet.message.*;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
-import com.github.arobie1992.clarinet.reputation.Reputation;
-import com.github.arobie1992.clarinet.reputation.ReputationStore;
+import com.github.arobie1992.clarinet.reputation.Assessment;
+import com.github.arobie1992.clarinet.reputation.AssessmentStore;
+import com.github.arobie1992.clarinet.reputation.ReputationService;
 import com.github.arobie1992.clarinet.transport.ExchangeHandler;
 import com.github.arobie1992.clarinet.transport.SendHandler;
 import com.github.arobie1992.clarinet.transport.Transport;
@@ -25,6 +26,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.*;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -38,15 +40,17 @@ class SimpleNode implements Node {
     private final PeerStore peerStore;
     final ConnectionStore connectionStore = new ConnectionStore();
     final TransportProxy transport;
-    private final Function<Stream<? extends Reputation>, Stream<PeerId>> trustFilter;
-    private final ReputationStore reputationStore;
+    private final BiFunction<Stream<? extends PeerId>, Function<PeerId, Double>, Stream<? extends PeerId>> trustFilter;
+    private final AssessmentStore assessmentStore;
+    private final ReputationService reputationService;
     private final MessageStore messageStore;
     private final KeyStore keyStore;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     SimpleNode(Builder builder) {
-        this.id = Objects.requireNonNull(builder.id, "id");
-        this.peerStore = Objects.requireNonNull(builder.peerStore, "peerStore");
+        this.id = Objects.requireNonNull(builder.id);
+        this.peerStore = Objects.requireNonNull(builder.peerStore);
+        this.reputationService = Objects.requireNonNull(builder.reputationService);
 
         this.transport = new TransportProxy(Objects.requireNonNull(builder.transportFactory.get()));
         this.transport.addInternal(Endpoints.CONNECT.name(), new ConnectHandlerProxy(builder.connectHandler, connectionStore, this));
@@ -68,10 +72,10 @@ class SimpleNode implements Node {
                 new MessageForwardHandlerProxy(builder.messageForwardHandler, connectionStore, this)
         );
 
-        this.trustFilter = Objects.requireNonNull(builder.trustFilter, "trustFilter");
-        this.reputationStore = Objects.requireNonNull(builder.reputationStore, "reputationStore");
-        this.messageStore = Objects.requireNonNull(builder.messageStore, "messageStore");
-        this.keyStore = Objects.requireNonNull(builder.keyStore, "keyStore");
+        this.trustFilter = Objects.requireNonNull(builder.trustFilter);
+        this.assessmentStore = Objects.requireNonNull(builder.assessmentStore);
+        this.messageStore = Objects.requireNonNull(builder.messageStore);
+        this.keyStore = Objects.requireNonNull(builder.keyStore);
 
         var module = new SimpleModule();
         module.addSerializer(PeerId.class, new PeerIdSerializer());
@@ -96,8 +100,13 @@ class SimpleNode implements Node {
     }
 
     @Override
-    public ReputationStore reputationStore() {
-        return reputationStore;
+    public AssessmentStore assessmentStore() {
+        return assessmentStore;
+    }
+
+    @Override
+    public ReputationService reputationService() {
+        return reputationService;
     }
 
     @Override
@@ -189,9 +198,10 @@ class SimpleNode implements Node {
                 }
             };
 
-            var witness = trustFilter.apply(reputationStore.findAll(
-                            // filter out this node itself and the receiver
-                            peerStore.all().filter(pid -> !id.equals(pid) && !receiver.equals(pid)))
+            // filter out this node itself and the receiver
+            var witness = trustFilter.apply(
+                            peerStore.all().filter(pid -> !id.equals(pid) && !receiver.equals(pid)),
+                            reputationService::get
                     ).map(peerStore::find)
                     .filter(Optional::isPresent)
                     .map(Optional::get)
@@ -296,8 +306,9 @@ class SimpleNode implements Node {
 
     // TODO change this to processQueryResult or something else that would allow for query forwarding
     @Override
-    public boolean updateReputation(QueryResult queryResult) {
-        var reputation = reputationStore.find(queryResult.queriedPeer());
+    public boolean updateAssessment(QueryResult queryResult) {
+        var existing = assessmentStore.find(queryResult.queriedPeer(), queryResult.queriedMessage());
+        Assessment updated;
         var resp = queryResult.queryResponse();
         List<PeerId> participants;
         try(var ref = connectionStore.findForRead(queryResult.queriedMessage().connectionId())) {
@@ -309,24 +320,26 @@ class SimpleNode implements Node {
         var messageOpt = messageStore.find(queryResult.queriedMessage());
 
         if(invalidSignature(resp, queryResult.queriedPeer())) {
-            reputation.strongPenalize();
+            updated = existing.updateStatus(Assessment.Status.STRONG_PENALTY);
         } else if(!participants.contains(queryResult.queriedPeer())) {
             return false;
         } else if(messageOpt.isEmpty()) {
             return false;
         } else if(!responseMatches(messageOpt.get(), queryResult.queryResponse())) {
             if(directCommunication(queryResult.queriedPeer(), participants)) {
-                reputation.strongPenalize();
+                updated = existing.updateStatus(Assessment.Status.STRONG_PENALTY);
             } else {
-                reputation.weakPenalize();
-                var otherReputation = getOtherParticipantReputation(participants, queryResult.queriedPeer());
-                otherReputation.weakPenalize();
-                reputationStore.save(otherReputation);
+                updated = existing.updateStatus(Assessment.Status.WEAK_PENALTY);
+                var otherParticipant = getOtherParticipant(participants, queryResult.queriedPeer());
+                var otherAssessment = assessmentStore.find(otherParticipant, queryResult.queriedMessage());
+                var otherUpdated = otherAssessment.updateStatus(Assessment.Status.WEAK_PENALTY);
+                assessmentStore.save(otherUpdated, reputationService::update);
             }
         } else {
-            reputation.reward();
+            updated = existing.updateStatus(Assessment.Status.REWARD);
         }
-        reputationStore.save(reputation);
+        Objects.requireNonNull(updated, "updated should never be null by this point");
+        assessmentStore.save(updated, reputationService::update);
         return true;
     }
 
@@ -342,7 +355,7 @@ class SimpleNode implements Node {
         return Arrays.equals(hash(message.witnessParts(), queryResponse.hashAlgorithm()), queryResponse.hash());
     }
 
-    private Reputation getOtherParticipantReputation(List<PeerId> participants, PeerId queriedPeer) {
+    private PeerId getOtherParticipant(List<PeerId> participants, PeerId queriedPeer) {
         var other = participants.stream()
                 .filter(id -> !id.equals(id()))
                 .filter(id -> !id.equals(queriedPeer))
@@ -352,7 +365,7 @@ class SimpleNode implements Node {
             var msg = "There were not exactly three participants in the connection including this node and the queried peer";
             throw new IllegalStateException(msg);
         }
-        return reputationStore.find(other.getFirst());
+        return other.getFirst();
     }
 
     private boolean directCommunication(PeerId peerId, List<PeerId> participants) {
@@ -573,8 +586,9 @@ class SimpleNode implements Node {
         private PeerStore peerStore;
         private Supplier<Transport> transportFactory;
         private ExchangeHandler<ConnectRequest, ConnectResponse> connectHandler;
-        private Function<Stream<? extends Reputation>, Stream<PeerId>> trustFilter;
-        private ReputationStore reputationStore;
+        private BiFunction<Stream<? extends PeerId>, Function<PeerId, Double>, Stream<? extends PeerId>> trustFilter;
+        private AssessmentStore assessmentStore;
+        private ReputationService reputationService;
         private ExchangeHandler<WitnessRequest, WitnessResponse> witnessRequestHandler;
         private SendHandler<WitnessNotification> witnessNotificationHandler;
         private MessageStore messageStore;
@@ -611,14 +625,20 @@ class SimpleNode implements Node {
         }
 
         @Override
-        public NodeBuilder trustFilter(Function<Stream<? extends Reputation>, Stream<PeerId>> trustFunction) {
+        public NodeBuilder trustFilter(BiFunction<Stream<? extends PeerId>, Function<PeerId, Double>, Stream<? extends PeerId>> trustFunction) {
             this.trustFilter = trustFunction;
             return this;
         }
 
         @Override
-        public NodeBuilder reputationStore(ReputationStore reputationStore) {
-            this.reputationStore = reputationStore;
+        public NodeBuilder assessmentStore(AssessmentStore assessmentStore) {
+            this.assessmentStore = assessmentStore;
+            return this;
+        }
+
+        @Override
+        public NodeBuilder reputationService(ReputationService reputationService) {
+            this.reputationService = reputationService;
             return this;
         }
 
