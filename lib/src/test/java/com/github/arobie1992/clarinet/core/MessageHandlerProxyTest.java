@@ -1,6 +1,7 @@
 package com.github.arobie1992.clarinet.core;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.github.arobie1992.clarinet.adt.Bytes;
 import com.github.arobie1992.clarinet.message.*;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.peer.PeerStore;
@@ -17,8 +18,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.*;
 
-import static com.github.arobie1992.clarinet.testutils.ArgumentMatcherUtils.optionalByteArrayEq;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
 class MessageHandlerProxyTest {
@@ -27,8 +28,8 @@ class MessageHandlerProxyTest {
             new Peer(PeerUtils.senderId(), new HashSet<>(Set.of(AddressUtils.defaultAddress()))),
             AddressUtils.defaultAddress()
     );
-    private final byte[] senderSignature = {22};
-    private final byte[] witnessSignature = {45};
+    private final Bytes senderSignature = Bytes.of(new byte[]{22});
+    private final Bytes witnessSignature = Bytes.of(new byte[]{45});
 
     private DataMessage message;
     private SendHandler<DataMessage> witnessHandler;
@@ -46,7 +47,7 @@ class MessageHandlerProxyTest {
 
     @BeforeEach
     void setUp() throws JsonProcessingException {
-        message = new DataMessage(new MessageId(ConnectionId.random(), 0), new byte[]{77, 50, 126});
+        message = new DataMessage(new MessageId(ConnectionId.random(), 0), Bytes.of(new byte[]{77, 50, 126}));
         message.setSenderSignature(senderSignature);
         //noinspection unchecked
         witnessHandler = (SendHandler<DataMessage>) mock(SendHandler.class);
@@ -81,11 +82,7 @@ class MessageHandlerProxyTest {
         when(assessmentStore.find(connection.sender(), message.messageId())).thenReturn(senderAsmt);
         when(assessmentStore.find(connection.witness().orElseThrow(), message.messageId())).thenReturn(witnessAsmt);
 
-        when(node.checkSignature(
-                eq(message.senderParts()),
-                eq(connection.sender()),
-                optionalByteArrayEq(message.senderSignature())
-        )).thenReturn(true);
+        when(node.checkSignature(message.senderParts(), connection.sender(), message.senderSignature())).thenReturn(true);
 
         var repSvc = mock(ReputationService.class);
         when(node.reputationService()).thenReturn(repSvc);
@@ -141,7 +138,7 @@ class MessageHandlerProxyTest {
     @Test
     void testWitnessSignatureValid() {
         proxy.handle(remoteInformation, message);
-        assertArrayEquals(witnessSignature, message.witnessSignature().orElseThrow());
+        assertEquals(witnessSignature, message.witnessSignature().orElseThrow());
         verify(messageStore).add(message);
         verify(assessmentStore).save(eq(senderAsmt.updateStatus(Assessment.Status.REWARD)), any());
         verify(node).sendInternal(connection.receiver(), message, new TransportOptions());
@@ -149,13 +146,9 @@ class MessageHandlerProxyTest {
 
     @Test
     void testWitnessSignatureInvalid() throws JsonProcessingException {
-        when(node.checkSignature(
-                eq(message.senderParts()),
-                eq(connection.sender()),
-                optionalByteArrayEq(message.senderSignature()))
-        ).thenReturn(false);
+        when(node.checkSignature(message.senderParts(), connection.sender(), message.senderSignature())).thenReturn(false);
         proxy.handle(remoteInformation, message);
-        assertArrayEquals(witnessSignature, message.witnessSignature().orElseThrow());
+        assertEquals(witnessSignature, message.witnessSignature().orElseThrow());
         verify(messageStore).add(message);
         verify(assessmentStore).save(eq(senderAsmt.updateStatus(Assessment.Status.STRONG_PENALTY)), any());
         verify(node).sendInternal(connection.receiver(), message, new TransportOptions());
@@ -172,11 +165,7 @@ class MessageHandlerProxyTest {
     void testReceiverSignaturesValid() throws JsonProcessingException {
         when(node.id()).thenReturn(connection.receiver());
         message.setWitnessSignature(witnessSignature);
-        when(node.checkSignature(
-                eq(message.witnessParts()),
-                eq(connection.witness().orElseThrow()),
-                optionalByteArrayEq(message.witnessSignature())
-        )).thenReturn(true);
+        when(node.checkSignature(message.witnessParts(), connection.witness().orElseThrow(), message.witnessSignature())).thenReturn(true);
         proxy.handle(remoteInformation, message);
         verify(messageStore).add(message);
         verify(assessmentStore).save(eq(senderAsmt.updateStatus(Assessment.Status.REWARD)), any());
@@ -199,24 +188,16 @@ class MessageHandlerProxyTest {
         message.setWitnessSignature(witnessSignature);
 
         when(node.id()).thenReturn(connection.receiver());
-        var msgHash = new byte[]{4,4,4};
+        var msgHash = Bytes.of(new byte[]{4,4,4});
         when(node.hash(message.witnessParts(), "SHA-256")).thenReturn(msgHash);
-        var fwdSig = new byte[]{7,7,7};
+        var fwdSig = Bytes.of(new byte[]{7,7,7});
         var summary = new MessageSummary(message.messageId(), msgHash, "SHA-256", witnessSignature);
         when(node.genSignature(summary)).thenReturn(fwdSig);
         var sender = mock(Peer.class);
         when(peerStore.find(connection.sender())).thenReturn(Optional.of(sender));
 
-        when(node.checkSignature(
-                eq(message.witnessParts()),
-                eq(connection.witness().orElseThrow()),
-                optionalByteArrayEq(message.witnessSignature())
-        )).thenReturn(true);
-        when(node.checkSignature(
-                eq(message.senderParts()),
-                eq(connection.sender()),
-                optionalByteArrayEq(message.senderSignature())
-        )).thenReturn(false);
+        when(node.checkSignature(message.witnessParts(), connection.witness().orElseThrow(), message.witnessSignature())).thenReturn(true);
+        when(node.checkSignature(message.senderParts(), connection.sender(), message.senderSignature())).thenReturn(false);
         proxy.handle(remoteInformation, message);
         verify(messageStore).add(message);
         verify(assessmentStore).save(eq(senderAsmt.updateStatus(Assessment.Status.WEAK_PENALTY)), any());

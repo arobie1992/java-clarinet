@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.github.arobie1992.clarinet.adt.Bytes;
 import com.github.arobie1992.clarinet.adt.None;
 import com.github.arobie1992.clarinet.adt.Some;
 import com.github.arobie1992.clarinet.core.*;
@@ -167,7 +168,7 @@ class IntegrationTest {
         verifyConnectionPresent(expected, receiver);
 
         // sending a message
-        var data = new byte[]{0, 1, 2, 3, 4};
+        var data = Bytes.of(new byte[]{0, 1, 2, 3, 4});
         var messageId = sender.send(connectionId, data, TransportUtils.defaultOptions());
         // need latch to ensure test doesn't do verification before the receiver gets the message
         // if it waited all 5 seconds, something's probably wrong and we want to revisit this.
@@ -269,7 +270,7 @@ class IntegrationTest {
         sender.addMessageForwardHandler(new SendLatchHandler<>(forwardLatch, MessageForward.class));
 
         // sending a message
-        var data = new byte[]{0, 1, 2, 3, 4};
+        var data = Bytes.of(new byte[]{0, 1, 2, 3, 4});
         var messageId = sender.send(connectionId, data, TransportUtils.defaultOptions());
         // need latch to ensure test doesn't do verification before the receiver gets the message
         // if it waited all 5 seconds, something's probably wrong and we want to revisit this.
@@ -411,7 +412,7 @@ class IntegrationTest {
             Node node,
             MessageId messageId,
             @SuppressWarnings("SameParameterValue") long seqNo,
-            byte[] data,
+            Bytes data,
             MessageVerificationMode mode
     ) throws JsonProcessingException {
         try(var ref = node.findConnection(messageId.connectionId())) {
@@ -422,25 +423,25 @@ class IntegrationTest {
             var messageOpt = node.messageStore().find(messageId);
             assertTrue(messageOpt.isPresent());
             var message = messageOpt.get();
-            assertArrayEquals(data, message.data());
+            assertEquals(data, message.data());
             assertEquals(seqNo, message.messageId().sequenceNumber());
             Collection<PublicKey> pubKeys;
-            byte[] encoded;
+            Bytes encoded;
             switch(mode) {
                 case SENDER_AND_WITNESS:
                     pubKeys = node.keyStore().findPublicKeys(connection.witness().orElseThrow());
-                    encoded = objectMapper.writeValueAsBytes(message.witnessParts());
+                    encoded = Bytes.of(objectMapper.writeValueAsBytes(message.witnessParts()));
                     verifyMessage(pubKeys, encoded, message.witnessSignature().orElseThrow());
                 case SENDER_ONLY:
                     pubKeys = node.keyStore().findPublicKeys(connection.sender());
-                    encoded = objectMapper.writeValueAsBytes(message.senderParts());
+                    encoded = Bytes.of(objectMapper.writeValueAsBytes(message.senderParts()));
                     verifyMessage(pubKeys, encoded, message.senderSignature().orElseThrow());
                     break;
             }
         }
     }
 
-    private void verifyMessage(Collection<PublicKey> pubKeys, byte[] data, byte[] signature) {
+    private void verifyMessage(Collection<PublicKey> pubKeys, Bytes data, Bytes signature) {
         var key = pubKeys.iterator().next();
         assertTrue(key.verify(data, signature));
     }

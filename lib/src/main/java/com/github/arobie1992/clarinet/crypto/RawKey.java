@@ -1,4 +1,6 @@
 package com.github.arobie1992.clarinet.crypto;
 
-public record RawKey(String algorithm, byte[] bytes) implements Key {
+import com.github.arobie1992.clarinet.adt.Bytes;
+
+public record RawKey(String algorithm, Bytes bytes) implements Key {
 }

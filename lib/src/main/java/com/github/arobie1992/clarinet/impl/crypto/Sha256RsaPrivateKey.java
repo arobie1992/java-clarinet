@@ -1,5 +1,6 @@
 package com.github.arobie1992.clarinet.impl.crypto;
 
+import com.github.arobie1992.clarinet.adt.Bytes;
 import com.github.arobie1992.clarinet.crypto.PrivateKey;
 import com.github.arobie1992.clarinet.crypto.SigningException;
 
@@ -18,15 +19,15 @@ public class Sha256RsaPrivateKey implements PrivateKey {
     }
 
     @Override
-    public byte[] sign(byte[] data) {
+    public Bytes sign(Bytes data) {
         try {
             var digest = MessageDigest.getInstance("SHA-256");
-            digest.update(data);
+            digest.update(data.bytes());
             var enc = digest.digest();
             var cipher = Cipher.getInstance("RSA");
             cipher.init(Cipher.ENCRYPT_MODE, javaKey);
             cipher.update(enc);
-            return cipher.doFinal();
+            return new Bytes(cipher.doFinal());
         } catch (NoSuchAlgorithmException|NoSuchPaddingException|InvalidKeyException|IllegalBlockSizeException|BadPaddingException e) {
             throw new SigningException(e);
         }
@@ -38,7 +39,7 @@ public class Sha256RsaPrivateKey implements PrivateKey {
     }
 
     @Override
-    public byte[] bytes() {
-        return javaKey.getEncoded();
+    public Bytes bytes() {
+        return Bytes.of(javaKey.getEncoded());
     }
 }

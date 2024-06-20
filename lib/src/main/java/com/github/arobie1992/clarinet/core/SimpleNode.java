@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.github.arobie1992.clarinet.adt.Bytes;
 import com.github.arobie1992.clarinet.crypto.*;
 import com.github.arobie1992.clarinet.impl.netty.ConnectionIdSerializer;
 import com.github.arobie1992.clarinet.impl.netty.PeerIdSerializer;
@@ -237,17 +238,17 @@ class SimpleNode implements Node {
         }
     }
 
-    byte[] genSignature(Object parts) {
-        byte[] serialized;
+    Bytes genSignature(Object parts) {
+        Bytes serialized;
         try {
-            serialized = objectMapper.writeValueAsBytes(parts);
+            serialized = Bytes.of(objectMapper.writeValueAsBytes(parts));
         } catch (JsonProcessingException e) {
             throw new UncheckedIOException(e);
         }
         return genSignature(serialized);
     }
 
-    byte[] genSignature(final byte[] data) {
+    Bytes genSignature(final Bytes data) {
         return keyStore.findPrivateKeys(id).stream().map(k -> {
             try {
                 return k.sign(data);
@@ -260,7 +261,7 @@ class SimpleNode implements Node {
     }
 
     @Override
-    public MessageId send(ConnectionId connectionId, byte[] data, TransportOptions transportOptions) {
+    public MessageId send(ConnectionId connectionId, Bytes data, TransportOptions transportOptions) {
         try(var ref = connectionStore.findForWrite(connectionId)) {
             if(!(ref instanceof Writeable(ConnectionImpl connection))) {
                 throw new NoSuchConnectionException(connectionId);
@@ -371,7 +372,7 @@ class SimpleNode implements Node {
     }
 
     private boolean responseMatches(DataMessage message, QueryResponse queryResponse) {
-        return Arrays.equals(hash(message.witnessParts(), queryResponse.hashAlgorithm()), queryResponse.hash());
+        return Objects.equals(hash(message.witnessParts(), queryResponse.hashAlgorithm()), queryResponse.hash());
     }
 
     private PeerId getOtherParticipant(List<PeerId> participants, PeerId queriedPeer) {
@@ -400,11 +401,11 @@ class SimpleNode implements Node {
         return Math.abs(selfPos - otherPos) == 1;
     }
 
-    byte[] hash(Object data, String algorithm) {
+    Bytes hash(Object data, String algorithm) {
         try {
             var enc = objectMapper.writeValueAsBytes(data);
             var digest = MessageDigest.getInstance(algorithm);
-            return digest.digest(enc);
+            return Bytes.of(digest.digest(enc));
         } catch (NoSuchAlgorithmException e) {
             throw new HashingException(e);
         } catch (JsonProcessingException e) {
@@ -412,7 +413,7 @@ class SimpleNode implements Node {
         }
     }
 
-    boolean checkSignature(byte[] data, PeerId peerId, byte[] signature) {
+    boolean checkSignature(Bytes data, PeerId peerId, Bytes signature) {
         var keys = getOrLoadKeys(peerId);
         return  keys.stream()
                 .map(k -> {
@@ -428,7 +429,7 @@ class SimpleNode implements Node {
                 .orElse(false);
     }
 
-    boolean checkSignatureHash(byte[] hash, PeerId peerId, byte[] signature) {
+    boolean checkSignatureHash(Bytes hash, PeerId peerId, Bytes signature) {
         var keys = getOrLoadKeys(peerId);
         return  keys.stream()
                 .map(k -> {
@@ -445,13 +446,13 @@ class SimpleNode implements Node {
     }
 
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
-    boolean checkSignature(byte[] data, PeerId peerId, Optional<byte[]> signature) {
+    boolean checkSignature(Bytes data, PeerId peerId, Optional<Bytes> signature) {
         return signature.map(sig -> checkSignature(data, peerId, sig)).orElse(false);
     }
 
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
-    boolean checkSignature(Object parts, PeerId peerId, Optional<byte[]> signature) throws JsonProcessingException {
-        var data = objectMapper.writeValueAsBytes(parts);
+    boolean checkSignature(Object parts, PeerId peerId, Optional<Bytes> signature) throws JsonProcessingException {
+        var data = Bytes.of(objectMapper.writeValueAsBytes(parts));
         return checkSignature(data, peerId, signature);
     }
 

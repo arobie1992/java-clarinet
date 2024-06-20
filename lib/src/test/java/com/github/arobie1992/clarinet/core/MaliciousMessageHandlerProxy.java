@@ -1,5 +1,6 @@
 package com.github.arobie1992.clarinet.core;
 
+import com.github.arobie1992.clarinet.adt.Bytes;
 import com.github.arobie1992.clarinet.adt.None;
 import com.github.arobie1992.clarinet.message.DataMessage;
 import com.github.arobie1992.clarinet.transport.RemoteInformation;
@@ -30,7 +31,7 @@ public class MaliciousMessageHandlerProxy extends MessageHandlerProxy {
             isWitness = connection.witness().map(id -> id.equals(node.id())).orElse(false);
         }
         if(isWitness && node.invalidSendSigOnMessage) {
-            message.setSenderSignature(new byte[]{106, 117, 110, 107});
+            message.setSenderSignature(Bytes.of(new byte[]{106, 117, 110, 107}));
         }
         return super.handle(remoteInformation, message);
     }

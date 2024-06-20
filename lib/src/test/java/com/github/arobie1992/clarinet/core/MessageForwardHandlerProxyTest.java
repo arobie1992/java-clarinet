@@ -1,5 +1,6 @@
 package com.github.arobie1992.clarinet.core;
 
+import com.github.arobie1992.clarinet.adt.Bytes;
 import com.github.arobie1992.clarinet.message.*;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.reputation.Assessment;
@@ -12,12 +13,10 @@ import com.github.arobie1992.clarinet.transport.SendHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 
-import static com.github.arobie1992.clarinet.testutils.ArgumentMatcherUtils.byteArrayEq;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -31,8 +30,8 @@ class MessageForwardHandlerProxyTest {
 
     MessageForwardHandlerProxyTest() {
         var messageId = new MessageId(ConnectionId.random(), 0);
-        var summary = new MessageSummary(messageId, new byte[]{99,44,55}, "SHA-256", new byte[]{91,23});
-        forward = new MessageForward(summary, new byte[]{65});
+        var summary = new MessageSummary(messageId, Bytes.of(new byte[]{99,44,55}), "SHA-256", Bytes.of(new byte[]{91,23}));
+        forward = new MessageForward(summary, Bytes.of(new byte[]{65}));
     }
 
     private SendHandler<MessageForward> userHandler;
@@ -73,9 +72,9 @@ class MessageForwardHandlerProxyTest {
         when(node.messageStore()).thenReturn(messageStore);
 
         when(node.checkSignatureHash(
-                byteArrayEq(forward.summary().hash()),
-                eq(PeerUtils.witnessId()),
-                byteArrayEq(forward.summary().witnessSignature()))
+                forward.summary().hash(),
+                PeerUtils.witnessId(),
+                forward.summary().witnessSignature())
         ).thenReturn(true);
 
         message = mock(DataMessage.class);
@@ -137,9 +136,9 @@ class MessageForwardHandlerProxyTest {
     @Test
     void testWitSigInvalid() {
         when(node.checkSignatureHash(
-                byteArrayEq(forward.summary().hash()),
-                eq(PeerUtils.witnessId()),
-                byteArrayEq(forward.summary().witnessSignature()))
+                forward.summary().hash(),
+                PeerUtils.witnessId(),
+                forward.summary().witnessSignature())
         ).thenReturn(false);
         proxy.handle(remoteInformation, forward);
         verifyNoInteractions(userHandler);
@@ -155,8 +154,8 @@ class MessageForwardHandlerProxyTest {
 
     @Test
     void testHashIncorrect() {
-        var hash = new byte[]{1,1,1,1};
-        assertFalse(Arrays.equals(forward.summary().hash(), hash));
+        var hash = Bytes.of(new byte[]{1,1,1,1});
+        assertNotEquals(forward.summary().hash(), hash);
         when(node.hash(message.witnessParts(), forward.summary().hashAlgorithm())).thenReturn(hash);
         proxy.handle(remoteInformation, forward);
         verify(assessmentStore).save(eq(witAsmt.updateStatus(Assessment.Status.STRONG_PENALTY)), any());

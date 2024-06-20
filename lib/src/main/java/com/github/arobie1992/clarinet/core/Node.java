@@ -1,5 +1,6 @@
 package com.github.arobie1992.clarinet.core;
 
+import com.github.arobie1992.clarinet.adt.Bytes;
 import com.github.arobie1992.clarinet.crypto.KeyStore;
 import com.github.arobie1992.clarinet.message.*;
 import com.github.arobie1992.clarinet.peer.PeerId;
@@ -43,7 +44,7 @@ public interface Node {
      */
     ConnectionId connect(PeerId receiver, ConnectionOptions connectionOptions, TransportOptions transportOptions);
 
-    MessageId send(ConnectionId connectionId, byte[] data, TransportOptions transportOptions);
+    MessageId send(ConnectionId connectionId, Bytes data, TransportOptions transportOptions);
 
     void close(ConnectionId connectionId, CloseOptions closeOptions, TransportOptions transportOptions);
 

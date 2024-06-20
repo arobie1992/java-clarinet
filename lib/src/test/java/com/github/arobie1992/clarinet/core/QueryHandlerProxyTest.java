@@ -1,5 +1,6 @@
 package com.github.arobie1992.clarinet.core;
 
+import com.github.arobie1992.clarinet.adt.Bytes;
 import com.github.arobie1992.clarinet.adt.Some;
 import com.github.arobie1992.clarinet.message.*;
 import com.github.arobie1992.clarinet.peer.Peer;
@@ -24,8 +25,8 @@ class QueryHandlerProxyTest {
             AddressUtils.defaultAddress()
     );
     private final QueryRequest queryRequest = new QueryRequest(new MessageId(ConnectionId.random(), 0));
-    private final QueryResponse expected = new QueryResponse(new byte[]{90}, new byte[]{47}, "SHA-256");
-    private final DataMessage storedMessage = new DataMessage(queryRequest.messageId(), new byte[]{123});
+    private final QueryResponse expected = new QueryResponse(Bytes.of(new byte[]{90}), Bytes.of(new byte[]{47}), "SHA-256");
+    private final DataMessage storedMessage = new DataMessage(queryRequest.messageId(), Bytes.of(new byte[]{123}));
 
     private ExchangeHandler<QueryRequest, QueryResponse> handler;
     private SimpleNode node;
@@ -33,8 +34,8 @@ class QueryHandlerProxyTest {
     private MessageStore messageStore;
 
     public QueryHandlerProxyTest() {
-        storedMessage.setSenderSignature(new byte[]{22});
-        storedMessage.setWitnessSignature(new byte[]{7});
+        storedMessage.setSenderSignature(Bytes.of(new byte[]{22}));
+        storedMessage.setWitnessSignature(Bytes.of(new byte[]{7}));
     }
 
     @BeforeEach
