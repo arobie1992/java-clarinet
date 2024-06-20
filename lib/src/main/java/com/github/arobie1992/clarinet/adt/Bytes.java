@@ -5,11 +5,11 @@ import java.util.Objects;
 
 /**
  * An immutable byte array that implements equality based on the contents.
- * @param bytes
  */
-public record Bytes(byte[] bytes) {
+public class Bytes {
+    private final byte[] bytes;
 
-    public Bytes(byte[] bytes) {
+    private Bytes(byte[] bytes) {
         this.bytes = Arrays.copyOf(bytes, bytes.length);
     }
 
@@ -17,7 +17,6 @@ public record Bytes(byte[] bytes) {
         return new Bytes(bytes);
     }
 
-    @Override
     public byte[] bytes() {
         return Arrays.copyOf(bytes, bytes.length);
     }

@@ -14,7 +14,7 @@ class QueryForwardTest {
     void testNullSignature() {
         assertThrows(NullPointerException.class, () -> new QueryForward(
                 new QueryResponse(Bytes.of(new byte[]{1}), Bytes.of(new byte[]{2}), "SHA-256"),
-                null)
-        );
+                null
+        ));
     }
 }
