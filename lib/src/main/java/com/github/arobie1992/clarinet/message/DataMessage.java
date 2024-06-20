@@ -1,18 +1,19 @@
 package com.github.arobie1992.clarinet.message;
 
-import java.util.Arrays;
+import com.github.arobie1992.clarinet.adt.Bytes;
+
 import java.util.Objects;
 import java.util.Optional;
 
 public class DataMessage {
     private final MessageId messageId;
-    private final byte[] data;
-    private byte[] senderSignature;
-    private byte[] witnessSignature;
+    private final Bytes data;
+    private Bytes senderSignature;
+    private Bytes witnessSignature;
 
-    public DataMessage(MessageId messageId, byte[] data) {
-        this.messageId = messageId;
-        this.data = Arrays.copyOf(Objects.requireNonNull(data), data.length);
+    public DataMessage(MessageId messageId, Bytes data) {
+        this.messageId = Objects.requireNonNull(messageId);
+        this.data = Objects.requireNonNull(data);
     }
 
     public SenderParts senderParts() {
@@ -27,71 +28,42 @@ public class DataMessage {
         return messageId;
     }
 
-    public byte[] data() {
-        return Arrays.copyOf(data, data.length);
+    public Bytes data() {
+        return data;
     }
 
-    public void setSenderSignature(byte[] signature) {
-        this.senderSignature = Arrays.copyOf(signature, signature.length);
+    public void setSenderSignature(Bytes signature) {
+        this.senderSignature = signature;
     }
 
-    public Optional<byte[]> senderSignature() {
-        if(senderSignature == null) {
-            return Optional.empty();
-        }
-        return Optional.of(Arrays.copyOf(senderSignature, senderSignature.length));
+    public Optional<Bytes> senderSignature() {
+        return Optional.ofNullable(senderSignature);
     }
 
-    public void setWitnessSignature(byte[] signature) {
-        this.witnessSignature = Arrays.copyOf(signature, signature.length);
+    public void setWitnessSignature(Bytes signature) {
+        this.witnessSignature = signature;
     }
 
-    public Optional<byte[]> witnessSignature() {
-        if(witnessSignature == null) {
-            return Optional.empty();
-        }
-        return Optional.of(Arrays.copyOf(witnessSignature, witnessSignature.length));
+    public Optional<Bytes> witnessSignature() {
+        return Optional.ofNullable(witnessSignature);
     }
 
-    public record SenderParts(MessageId messageId, byte[] data) {
-        // https://stackoverflow.com/questions/61261226/java-14-records-and-arrays
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            SenderParts that = (SenderParts) o;
-            return Objects.deepEquals(data, that.data) && Objects.equals(messageId, that.messageId);
-        }
-        @Override
-        public int hashCode() {
-            return Objects.hash(messageId, Arrays.hashCode(data));
-        }
-    }
-    public record WitnessParts(MessageId messageId, byte[] data, byte[] senderSignature) {
-        // https://stackoverflow.com/questions/61261226/java-14-records-and-arrays
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            WitnessParts that = (WitnessParts) o;
-            return Objects.deepEquals(data, that.data) && Objects.equals(messageId, that.messageId) && Objects.deepEquals(senderSignature, that.senderSignature);
-        }
-        @Override
-        public int hashCode() {
-            return Objects.hash(messageId, Arrays.hashCode(data), Arrays.hashCode(senderSignature));
-        }
-    }
+    public record SenderParts(MessageId messageId, Bytes data) {}
+    public record WitnessParts(MessageId messageId, Bytes data, Bytes senderSignature) {}
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         DataMessage message = (DataMessage) o;
-        return Objects.equals(messageId, message.messageId) && Objects.deepEquals(data, message.data) && Objects.deepEquals(senderSignature, message.senderSignature) && Objects.deepEquals(witnessSignature, message.witnessSignature);
+        return Objects.equals(messageId, message.messageId)
+                && Objects.equals(data, message.data)
+                && Objects.equals(senderSignature, message.senderSignature)
+                && Objects.equals(witnessSignature, message.witnessSignature);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(messageId, Arrays.hashCode(data), Arrays.hashCode(senderSignature), Arrays.hashCode(witnessSignature));
+        return Objects.hash(messageId, data, senderSignature, witnessSignature);
     }
 }

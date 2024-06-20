@@ -9,7 +9,6 @@ import com.github.arobie1992.clarinet.transport.SendHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
 import java.util.Objects;
 
 class MessageForwardHandlerProxy implements SendHandler<MessageForward> {
@@ -72,7 +71,7 @@ class MessageForwardHandlerProxy implements SendHandler<MessageForward> {
             }
 
             var hash = node.hash(storedMsg.get().witnessParts(), message.summary().hashAlgorithm());
-            if(!Arrays.equals(hash, message.summary().hash())) {
+            if(!Objects.equals(hash, message.summary().hash())) {
                 var assessment = node.assessmentStore().find(witId, message.summary().messageId());
                 node.assessmentStore().save(assessment.updateStatus(Assessment.Status.STRONG_PENALTY), node.reputationService()::update);
             }

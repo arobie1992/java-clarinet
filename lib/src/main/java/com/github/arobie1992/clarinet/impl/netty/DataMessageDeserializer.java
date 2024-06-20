@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import com.github.arobie1992.clarinet.adt.Bytes;
 import com.github.arobie1992.clarinet.core.ConnectionId;
 import com.github.arobie1992.clarinet.message.DataMessage;
 import com.github.arobie1992.clarinet.message.MessageId;
@@ -33,12 +34,12 @@ public class DataMessageDeserializer extends JsonDeserializer<DataMessage> {
         return message;
     }
 
-    private byte[] decodeBytes(TreeNode tree, String fieldName) {
+    private Bytes decodeBytes(TreeNode tree, String fieldName) {
         var node = tree.get(fieldName);
         if(node == null) {
             return null;
         }
         var str = ((TextNode) node).textValue();
-        return Base64.getDecoder().decode(str);
+        return Bytes.of(Base64.getDecoder().decode(str));
     }
 }

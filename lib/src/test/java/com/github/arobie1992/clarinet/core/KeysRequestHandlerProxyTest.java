@@ -1,5 +1,6 @@
 package com.github.arobie1992.clarinet.core;
 
+import com.github.arobie1992.clarinet.adt.Bytes;
 import com.github.arobie1992.clarinet.adt.Some;
 import com.github.arobie1992.clarinet.crypto.KeyStore;
 import com.github.arobie1992.clarinet.crypto.PublicKey;
@@ -26,7 +27,7 @@ class KeysRequestHandlerProxyTest {
             AddressUtils.defaultAddress()
     );
     private final KeysRequest request = new KeysRequest();
-    private final RawKey rawKey = new RawKey("testAlgorithm", new byte[]{83});
+    private final RawKey rawKey = new RawKey("testAlgorithm", Bytes.of(new byte[]{83}));
     private final Some<KeysResponse> expected = new Some<>(new KeysResponse(List.of(rawKey)));
 
     private ExchangeHandler<KeysRequest, KeysResponse> handler;

@@ -3,6 +3,7 @@ package com.github.arobie1992.clarinet.impl.netty;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.SerializerProvider;
+import com.github.arobie1992.clarinet.adt.Bytes;
 import com.github.arobie1992.clarinet.message.DataMessage;
 
 import java.io.IOException;
@@ -24,8 +25,8 @@ public class DataMessageSerializer extends JsonSerializer<DataMessage> {
         gen.writeEndObject();
     }
 
-    private void writeBytes(String fieldName, byte[] bytes, JsonGenerator gen) throws IOException {
-        var encoded = Base64.getEncoder().encodeToString(bytes);
+    private void writeBytes(String fieldName, Bytes bytes, JsonGenerator gen) throws IOException {
+        var encoded = Base64.getEncoder().encodeToString(bytes.bytes());
         gen.writeStringField(fieldName, encoded);
     }
 }

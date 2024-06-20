@@ -1,5 +1,6 @@
 package com.github.arobie1992.clarinet.impl.inmemory;
 
+import com.github.arobie1992.clarinet.adt.Bytes;
 import com.github.arobie1992.clarinet.core.ConnectionId;
 import com.github.arobie1992.clarinet.message.DataMessage;
 import com.github.arobie1992.clarinet.message.ExistingMessageIdException;
@@ -11,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class InMemoryMessageStoreTest {
 
-    private final DataMessage message = new DataMessage(new MessageId(ConnectionId.random(), 0), new byte[]{0,2,3,4});
+    private final DataMessage message = new DataMessage(new MessageId(ConnectionId.random(), 0), Bytes.of(new byte[]{0,2,3,4}));
     private InMemoryMessageStore store;
 
     @BeforeEach
@@ -38,7 +39,7 @@ class InMemoryMessageStoreTest {
     void testModificationsAfterAddNotPersisted() {
         assertTrue(message.witnessSignature().isEmpty());
         store.add(message);
-        message.setWitnessSignature("test sig".getBytes());
+        message.setWitnessSignature(Bytes.of("test sig".getBytes()));
         var stored = store.find(message.messageId()).orElseThrow();
         assertNotNull(message.witnessSignature());
         assertTrue(stored.witnessSignature().isEmpty());
@@ -49,7 +50,7 @@ class InMemoryMessageStoreTest {
         store.add(message);
         var stored1 = store.find(message.messageId()).orElseThrow();
         assertTrue(stored1.witnessSignature().isEmpty());
-        stored1.setWitnessSignature("test sig".getBytes());
+        stored1.setWitnessSignature(Bytes.of("test sig".getBytes()));
         var stored2 = store.find(message.messageId()).orElseThrow();
         assertTrue(stored2.witnessSignature().isEmpty());
     }

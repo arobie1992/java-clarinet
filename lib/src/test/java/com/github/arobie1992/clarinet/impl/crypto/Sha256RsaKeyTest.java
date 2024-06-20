@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.github.arobie1992.clarinet.adt.Bytes;
 import com.github.arobie1992.clarinet.core.ConnectionId;
 import com.github.arobie1992.clarinet.crypto.KeyPair;
 import com.github.arobie1992.clarinet.crypto.SigningException;
@@ -39,7 +40,7 @@ class Sha256RsaKeyTest {
 
     private final java.security.KeyPair javaPair;
     private final KeyPair keyPair;
-    private final byte[] data = new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+    private final Bytes data = Bytes.of(new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     Sha256RsaKeyTest() throws NoSuchAlgorithmException {
@@ -67,7 +68,7 @@ class Sha256RsaKeyTest {
     @Test
     void testSignAndVerifyDataMessage() throws JsonProcessingException {
         var message = new DataMessage(new MessageId(ConnectionId.random(), 0), data);
-        var serialized = objectMapper.writeValueAsBytes(message.senderParts());
+        var serialized = Bytes.of(objectMapper.writeValueAsBytes(message.senderParts()));
         var sig = keyPair.privateKey().sign(serialized);
         message.setSenderSignature(sig);
         assertTrue(keyPair.publicKey().verify(serialized, message.senderSignature().orElseThrow()));
@@ -129,7 +130,7 @@ class Sha256RsaKeyTest {
         try(var md = Mockito.mockStatic(MessageDigest.class)) {
             md.when(() -> MessageDigest.getInstance("SHA-256")).thenThrow(NoSuchAlgorithmException.class);
             // sig doesn't matter so just pass dummy data
-            var ex = assertThrows(VerificationException.class, () -> keyPair.publicKey().verify(data, new byte[]{0}));
+            var ex = assertThrows(VerificationException.class, () -> keyPair.publicKey().verify(data, Bytes.of(new byte[]{0})));
             assertEquals(NoSuchAlgorithmException.class, ex.getCause().getClass());
         }
     }
@@ -139,7 +140,7 @@ class Sha256RsaKeyTest {
         try(var cipher = Mockito.mockStatic(Cipher.class)) {
             cipher.when(() -> Cipher.getInstance("RSA")).thenThrow(NoSuchAlgorithmException.class);
             // sig doesn't matter so just pass dummy data
-            var ex = assertThrows(VerificationException.class, () -> keyPair.publicKey().verify(data, new byte[]{0}));
+            var ex = assertThrows(VerificationException.class, () -> keyPair.publicKey().verify(data, Bytes.of(new byte[]{0})));
             assertEquals(NoSuchAlgorithmException.class, ex.getCause().getClass());
         }
     }
@@ -149,7 +150,7 @@ class Sha256RsaKeyTest {
         try(var cipher = Mockito.mockStatic(Cipher.class)) {
             cipher.when(() -> Cipher.getInstance("RSA")).thenThrow(NoSuchPaddingException.class);
             // sig doesn't matter so just pass dummy data
-            var ex = assertThrows(VerificationException.class, () -> keyPair.publicKey().verify(data, new byte[]{0}));
+            var ex = assertThrows(VerificationException.class, () -> keyPair.publicKey().verify(data, Bytes.of(new byte[]{0})));
             assertEquals(NoSuchPaddingException.class, ex.getCause().getClass());
         }
     }
@@ -161,7 +162,7 @@ class Sha256RsaKeyTest {
             cipher.when(() -> Cipher.getInstance("RSA")).thenReturn(cipherMock);
             doThrow(InvalidKeyException.class).when(cipherMock).init(eq(Cipher.DECRYPT_MODE), any(Key.class));
             // sig doesn't matter so just pass dummy data
-            var ex = assertThrows(VerificationException.class, () -> keyPair.publicKey().verify(data, new byte[]{0}));
+            var ex = assertThrows(VerificationException.class, () -> keyPair.publicKey().verify(data, Bytes.of(new byte[]{0})));
             assertEquals(InvalidKeyException.class, ex.getCause().getClass());
         }
     }
@@ -173,7 +174,7 @@ class Sha256RsaKeyTest {
             cipher.when(() -> Cipher.getInstance("RSA")).thenReturn(cipherMock);
             doThrow(IllegalBlockSizeException.class).when(cipherMock).doFinal();
             // sig doesn't matter so just pass dummy data
-            var ex = assertThrows(VerificationException.class, () -> keyPair.publicKey().verify(data, new byte[]{0}));
+            var ex = assertThrows(VerificationException.class, () -> keyPair.publicKey().verify(data, Bytes.of(new byte[]{0})));
             assertEquals(IllegalBlockSizeException.class, ex.getCause().getClass());
         }
     }
@@ -185,25 +186,28 @@ class Sha256RsaKeyTest {
             cipher.when(() -> Cipher.getInstance("RSA")).thenReturn(cipherMock);
             doThrow(BadPaddingException.class).when(cipherMock).doFinal();
             // sig doesn't matter so just pass dummy data
-            var ex = assertThrows(VerificationException.class, () -> keyPair.publicKey().verify(data, new byte[]{0}));
+            var ex = assertThrows(VerificationException.class, () -> keyPair.publicKey().verify(data, Bytes.of(new byte[]{0})));
             assertEquals(BadPaddingException.class, ex.getCause().getClass());
         }
     }
 
     @Test
     void testVerifyHashNot32Bytes() {
-        var ex = assertThrows(VerificationException.class, () -> keyPair.publicKey().verifyHash(new byte[23], new byte[]{0}));
+        var ex = assertThrows(
+                VerificationException.class,
+                () -> keyPair.publicKey().verifyHash(Bytes.of(new byte[]{23}), Bytes.of(new byte[]{0}))
+        );
         assertEquals("hash is not a valid SHA-256", ex.getMessage());
     }
 
     @Test
     void testVerifyHash() throws JsonProcessingException, NoSuchAlgorithmException {
         var message = new DataMessage(new MessageId(ConnectionId.random(), 0), data);
-        var serialized = objectMapper.writeValueAsBytes(message.senderParts());
+        var serialized = Bytes.of(objectMapper.writeValueAsBytes(message.senderParts()));
         var sig = keyPair.privateKey().sign(serialized);
         var digest = MessageDigest.getInstance("SHA-256");
-        var hash = digest.digest(serialized);
-        assertTrue(keyPair.publicKey().verifyHash(hash, sig));
+        var hash = digest.digest(serialized.bytes());
+        assertTrue(keyPair.publicKey().verifyHash(Bytes.of(hash), sig));
     }
 
     @ParameterizedTest
@@ -221,14 +225,14 @@ class Sha256RsaKeyTest {
 
     @ParameterizedTest
     @MethodSource("bytesKeys")
-    void testBytes(com.github.arobie1992.clarinet.crypto.Key key, byte[] expected) {
-        assertArrayEquals(expected, key.bytes());
+    void testBytes(com.github.arobie1992.clarinet.crypto.Key key, Bytes expected) {
+        assertEquals(expected, key.bytes());
     }
 
     private Stream<Arguments> bytesKeys() {
         return Stream.of(
-                Arguments.of(keyPair.publicKey(), javaPair.getPublic().getEncoded()),
-                Arguments.of(keyPair.privateKey(), javaPair.getPrivate().getEncoded())
+                Arguments.of(keyPair.publicKey(), Bytes.of(javaPair.getPublic().getEncoded())),
+                Arguments.of(keyPair.privateKey(), Bytes.of(javaPair.getPrivate().getEncoded()))
         );
     }
     

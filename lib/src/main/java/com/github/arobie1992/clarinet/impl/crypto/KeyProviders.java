@@ -1,5 +1,6 @@
 package com.github.arobie1992.clarinet.impl.crypto;
 
+import com.github.arobie1992.clarinet.adt.Bytes;
 import com.github.arobie1992.clarinet.crypto.KeyCreationException;
 import com.github.arobie1992.clarinet.crypto.PublicKey;
 import com.github.arobie1992.clarinet.crypto.PublicKeyProvider;
@@ -15,10 +16,10 @@ public class KeyProviders {
     private static final PublicKeyProvider Sha256RsaPublicKeyProvider = new PublicKeyProvider() {
         private static final Sha256RsaPrivateKey REF_KEY = new Sha256RsaPrivateKey(null);
         @Override
-        public PublicKey create(byte[] keyBytes) {
+        public PublicKey create(Bytes keyBytes) {
             try {
                 var kf = KeyFactory.getInstance("RSA");
-                var publicKey = kf.generatePublic(new X509EncodedKeySpec(keyBytes));
+                var publicKey = kf.generatePublic(new X509EncodedKeySpec(keyBytes.bytes()));
                 return new Sha256RsaPublicKey(publicKey);
             } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
                 throw new KeyCreationException(e);

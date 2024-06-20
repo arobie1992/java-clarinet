@@ -1,5 +1,6 @@
 package com.github.arobie1992.clarinet.impl.inmemory;
 
+import com.github.arobie1992.clarinet.adt.Bytes;
 import com.github.arobie1992.clarinet.crypto.KeyPair;
 import com.github.arobie1992.clarinet.crypto.PrivateKey;
 import com.github.arobie1992.clarinet.crypto.PublicKey;
@@ -18,26 +19,26 @@ class InMemoryKeyStoreTest {
 
     private record TestPrivateKey(int value) implements PrivateKey {
         @Override
-        public byte[] sign(byte[] data) {
-            return new byte[0];
+        public Bytes sign(Bytes data) {
+            return Bytes.of(new byte[0]);
         }
         @Override
         public String algorithm() {
             return "";
         }
         @Override
-        public byte[] bytes() {
-            return new byte[0];
+        public Bytes bytes() {
+            return Bytes.of(new byte[0]);
         }
     }
 
     private record TestPublicKey(int value) implements PublicKey {
         @Override
-        public boolean verify(byte[] data, byte[] signature) {
+        public boolean verify(Bytes data, Bytes signature) {
             return false;
         }
         @Override
-        public boolean verifyHash(byte[] hash, byte[] signature) {
+        public boolean verifyHash(Bytes hash, Bytes signature) {
             return false;
         }
         @Override
@@ -45,8 +46,8 @@ class InMemoryKeyStoreTest {
             return "";
         }
         @Override
-        public byte[] bytes() {
-            return new byte[0];
+        public Bytes bytes() {
+            return Bytes.of(new byte[0]);
         }
     }
 

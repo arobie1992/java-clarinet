@@ -1,7 +1,6 @@
 package com.github.arobie1992.clarinet.message;
 
-import java.util.Arrays;
-import java.util.Objects;
+import com.github.arobie1992.clarinet.adt.Bytes;
 
 /**
  * The data this node has for the queried message.
@@ -15,31 +14,5 @@ import java.util.Objects;
  * @param signature The signature of {@code hash}.
  * @param hashAlgorithm The hashing algorithm this node used to generate {@code hash}.
  */
-public record QueryResponse(byte[] hash, byte[] signature, String hashAlgorithm) {
-    public QueryResponse(byte[] hash, byte[] signature, String hashAlgorithm) {
-        this.hash = hash == null ? null : Arrays.copyOf(hash, hash.length);
-        this.signature = hash == null ? null : Arrays.copyOf(signature, signature.length);
-        this.hashAlgorithm = hashAlgorithm;
-    }
-    public byte[] hash() {
-        return hash == null ? null : Arrays.copyOf(hash, hash.length);
-    }
-    public byte[] signature() {
-        return hash == null ? null : Arrays.copyOf(signature, signature.length);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        QueryResponse that = (QueryResponse) o;
-        return Objects.deepEquals(hash, that.hash)
-                && Objects.deepEquals(signature, that.signature)
-                && Objects.equals(hashAlgorithm, that.hashAlgorithm);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(Arrays.hashCode(hash), Arrays.hashCode(signature), hashAlgorithm);
-    }
+public record QueryResponse(Bytes hash, Bytes signature, String hashAlgorithm) {
 }
