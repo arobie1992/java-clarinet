@@ -9,7 +9,8 @@ public enum Endpoints {
     REQUEST_KEYS,
     QUERY,
     CLOSE,
-    MESSAGE_FORWARD;
+    MESSAGE_FORWARD,
+    QUERY_FORWARD;
 
     static boolean isEndpoint(String endpoint) {
         for (Endpoints e : Endpoints.values()) {

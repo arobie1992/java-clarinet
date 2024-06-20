@@ -185,31 +185,31 @@ class IntegrationTest {
 
         // sender querying message
         var resp = sender.query(witness.id(), messageId, new TransportOptions());
-        sender.updateAssessment(resp);
+        sender.processQueryResult(resp, new TransportOptions());
         verifyAssessment(sender, witness.id(), messageId, Assessment.Status.REWARD);
         verifyReputation(sender, witness.id(), 1);
         resp = sender.query(receiver.id(), messageId, new TransportOptions());
-        sender.updateAssessment(resp);
+        sender.processQueryResult(resp, new TransportOptions());
         verifyAssessment(sender, receiver.id(), messageId, Assessment.Status.REWARD);
         verifyReputation(sender, receiver.id(), 1);
 
         // witness querying message
         resp = witness.query(sender.id(), messageId, new TransportOptions());
-        witness.updateAssessment(resp);
+        witness.processQueryResult(resp, new TransportOptions());
         verifyAssessment(witness, sender.id(), messageId, Assessment.Status.REWARD);
         verifyReputation(witness, sender.id(), 1);
         resp = witness.query(receiver.id(), messageId, new TransportOptions());
-        witness.updateAssessment(resp);
+        witness.processQueryResult(resp, new TransportOptions());
         verifyAssessment(witness, receiver.id(), messageId, Assessment.Status.REWARD);
         verifyReputation(witness, receiver.id(), 1);
 
         // receiver querying message
         resp = receiver.query(sender.id(), messageId, new TransportOptions());
-        receiver.updateAssessment(resp);
+        receiver.processQueryResult(resp, new TransportOptions());
         verifyAssessment(receiver, sender.id(), messageId, Assessment.Status.REWARD);
         verifyReputation(receiver, sender.id(), 1);
         resp = receiver.query(witness.id(), messageId, new TransportOptions());
-        receiver.updateAssessment(resp);
+        receiver.processQueryResult(resp, new TransportOptions());
         verifyAssessment(receiver, witness.id(), messageId, Assessment.Status.REWARD);
         verifyReputation(receiver, witness.id(), 1);
 
@@ -283,21 +283,21 @@ class IntegrationTest {
 
         // sender querying message
         var resp = sender.query(witness.id(), messageId, new TransportOptions());
-        sender.updateAssessment(resp);
+        sender.processQueryResult(resp, new TransportOptions());
         verifyAssessment(sender, witness.id(), messageId, Assessment.Status.STRONG_PENALTY);
         verifyReputation(sender, witness.id(), 0.25);
         resp = sender.query(receiver.id(), messageId, new TransportOptions());
-        sender.updateAssessment(resp);
+        sender.processQueryResult(resp, new TransportOptions());
         verifyAssessment(sender, receiver.id(), messageId, Assessment.Status.WEAK_PENALTY);
         verifyReputation(sender, receiver.id(), 0.5);
 
         // receiver querying message
         resp = receiver.query(sender.id(), messageId, new TransportOptions());
-        receiver.updateAssessment(resp);
+        receiver.processQueryResult(resp, new TransportOptions());
         verifyAssessment(receiver, sender.id(), messageId, Assessment.Status.WEAK_PENALTY);
         verifyReputation(receiver, sender.id(), 0.5);
         resp = receiver.query(witness.id(), messageId, new TransportOptions());
-        receiver.updateAssessment(resp);
+        receiver.processQueryResult(resp, new TransportOptions());
         verifyAssessment(receiver, witness.id(), messageId, Assessment.Status.WEAK_PENALTY);
         verifyReputation(receiver, witness.id(),  0.5);
     }

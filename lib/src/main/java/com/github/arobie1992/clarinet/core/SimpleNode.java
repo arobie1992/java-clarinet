@@ -312,9 +312,8 @@ class SimpleNode implements Node {
         return new QueryResult(peerId, messageId, resp);
     }
 
-    // TODO change this to processQueryResult or something else that would allow for query forwarding
     @Override
-    public boolean updateAssessment(QueryResult queryResult) {
+    public boolean processQueryResult(QueryResult queryResult, TransportOptions transportOptions) {
         var assessment = assessmentStore.find(queryResult.queriedPeer(), queryResult.queriedMessage());
         var resp = queryResult.queryResponse();
         List<PeerId> participants;
@@ -326,18 +325,22 @@ class SimpleNode implements Node {
         }
         var messageOpt = messageStore.find(queryResult.queriedMessage());
 
+        var otherParticipant = getOtherParticipant(participants, queryResult.queriedPeer());
+        boolean validSig = true;
         if(invalidSignature(resp, queryResult.queriedPeer())) {
             assessment = assessment.updateStatus(Assessment.Status.STRONG_PENALTY);
+            validSig = false;
         } else if(!participants.contains(queryResult.queriedPeer())) {
+            forward(otherParticipant, resp, transportOptions);
             return false;
         } else if(messageOpt.isEmpty()) {
+            forward(otherParticipant, resp, transportOptions);
             return false;
         } else if(!responseMatches(messageOpt.get(), queryResult.queryResponse())) {
             if(directCommunication(queryResult.queriedPeer(), participants)) {
                 assessment = assessment.updateStatus(Assessment.Status.STRONG_PENALTY);
             } else {
                 assessment = assessment.updateStatus(Assessment.Status.WEAK_PENALTY);
-                var otherParticipant = getOtherParticipant(participants, queryResult.queriedPeer());
                 var otherAssessment = assessmentStore.find(otherParticipant, queryResult.queriedMessage());
                 var otherUpdated = otherAssessment.updateStatus(Assessment.Status.WEAK_PENALTY);
                 assessmentStore.save(otherUpdated, reputationService::update);
@@ -346,7 +349,17 @@ class SimpleNode implements Node {
             assessment = assessment.updateStatus(Assessment.Status.REWARD);
         }
         assessmentStore.save(assessment, reputationService::update);
+        if(validSig) {
+            forward(otherParticipant, resp, transportOptions);
+        }
         return true;
+    }
+
+    private void forward(PeerId peerId, QueryResponse queryResponse, TransportOptions transportOptions) {
+        var sig = genSignature(queryResponse);
+        var forward = new QueryForward(queryResponse, sig);
+        var peer = peerStore.find(peerId).orElseThrow(() -> new NoSuchPeerException(peerId));
+        sendForPeer(peer, Endpoints.QUERY_FORWARD.name(), forward, transportOptions);
     }
 
     private boolean invalidSignature(QueryResponse queryResponse, PeerId queriedPeer) {
