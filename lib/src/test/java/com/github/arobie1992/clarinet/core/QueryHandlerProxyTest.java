@@ -25,7 +25,8 @@ class QueryHandlerProxyTest {
             AddressUtils.defaultAddress()
     );
     private final QueryRequest queryRequest = new QueryRequest(new MessageId(ConnectionId.random(), 0));
-    private final QueryResponse expected = new QueryResponse(Bytes.of(new byte[]{90}), Bytes.of(new byte[]{47}), "SHA-256");
+    private final MessageDetails details = new MessageDetails(queryRequest.messageId(), Bytes.of(new byte[]{90}));
+    private final QueryResponse expected = new QueryResponse(details, Bytes.of(new byte[]{47}), "SHA-256");
     private final DataMessage storedMessage = new DataMessage(queryRequest.messageId(), Bytes.of(new byte[]{123}));
 
     private ExchangeHandler<QueryRequest, QueryResponse> handler;
@@ -47,13 +48,13 @@ class QueryHandlerProxyTest {
         messageStore = mock(MessageStore.class);
         when(node.messageStore()).thenReturn(messageStore);
         when(messageStore.find(queryRequest.messageId())).thenReturn(Optional.of(storedMessage));
-        when(node.genSignature(expected.hash())).thenReturn(expected.signature());
+        when(node.genSignature(expected.messageDetails())).thenReturn(expected.signature());
     }
 
     @Test
     void testHonorsUserHandler() {
         proxy = new QueryHandlerProxy(handler, node);
-        var expected = new Some<>(new QueryResponse(null,null, null));
+        var expected = new Some<>(new QueryResponse(new MessageDetails(queryRequest.messageId(), null),null, null));
         when(handler.handle(remoteInformation, queryRequest)).thenReturn(expected);
         assertEquals(expected, proxy.handle(remoteInformation, queryRequest));
     }
@@ -69,13 +70,13 @@ class QueryHandlerProxyTest {
     @Test
     void testNoStoredMessage() {
         when(messageStore.find(queryRequest.messageId())).thenReturn(Optional.empty());
-        var expected = new Some<>(new QueryResponse(null,null, null));
+        var expected = new Some<>(new QueryResponse(new MessageDetails(queryRequest.messageId(), null),null, null));
         assertEquals(expected, proxy.handle(remoteInformation, queryRequest));
     }
 
     @Test
     void testHasMessage() {
-        when(node.hash(storedMessage.witnessParts(), expected.hashAlgorithm())).thenReturn(expected.hash());
+        when(node.hash(storedMessage.witnessParts(), expected.hashAlgorithm())).thenReturn(expected.messageDetails().messageHash());
         assertEquals(expected, proxy.handle(remoteInformation, queryRequest).value());
     }
 

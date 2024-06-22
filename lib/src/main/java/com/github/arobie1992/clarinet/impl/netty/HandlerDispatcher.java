@@ -38,6 +38,7 @@ class HandlerDispatcher extends ChannelInboundHandlerAdapter {
     HandlerDispatcher(Map<String, Handler<Object, Object>> handlers) {
         this.handlers = handlers;
         var module = new SimpleModule();
+        module.addSerializer(ConnectionId.class, new ConnectionIdSerializer());
         module.addSerializer(PeerId.class, new PeerIdSerializer());
         module.addSerializer(Address.class, new AddressSerializer());
         module.addDeserializer(PeerId.class, new PeerIdDeserializer());

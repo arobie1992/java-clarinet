@@ -26,7 +26,10 @@ import java.io.UncheckedIOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.util.*;
+import java.util.Collection;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -79,6 +82,10 @@ class SimpleNode implements Node {
         this.transport.addInternal(
                 Endpoints.MESSAGE_FORWARD.name(),
                 new MessageForwardHandlerProxy(builder.messageForwardHandler, connectionStore, this)
+        );
+        this.transport.addInternal(
+                Endpoints.QUERY_FORWARD.name(),
+                new QueryForwardHandlerProxy(builder.queryForwardHandler, connectionStore, this)
         );
 
         this.trustFilter = Objects.requireNonNull(builder.trustFilter);
@@ -332,10 +339,10 @@ class SimpleNode implements Node {
             assessment = assessment.updateStatus(Assessment.Status.STRONG_PENALTY);
             validSig = false;
         } else if(!participants.contains(queryResult.queriedPeer())) {
-            forward(otherParticipant, resp, transportOptions);
+            forward(otherParticipant, queryResult, transportOptions);
             return false;
         } else if(messageOpt.isEmpty()) {
-            forward(otherParticipant, resp, transportOptions);
+            forward(otherParticipant, queryResult, transportOptions);
             return false;
         } else if(!responseMatches(messageOpt.get(), queryResult.queryResponse())) {
             if(directCommunication(queryResult.queriedPeer(), participants)) {
@@ -351,31 +358,35 @@ class SimpleNode implements Node {
         }
         assessmentStore.save(assessment, reputationService::update);
         if(validSig) {
-            forward(otherParticipant, resp, transportOptions);
+            forward(otherParticipant, queryResult, transportOptions);
         }
         return true;
     }
 
-    private void forward(PeerId peerId, QueryResponse queryResponse, TransportOptions transportOptions) {
-        var sig = genSignature(queryResponse);
-        var forward = new QueryForward(queryResponse, sig);
+    private void forward(PeerId peerId, QueryResult queryResult, TransportOptions transportOptions) {
+        var sig = genSignature(queryResult.queryResponse());
+        var forward = new QueryForward(queryResult.queriedPeer(), queryResult.queryResponse(), sig);
         var peer = peerStore.find(peerId).orElseThrow(() -> new NoSuchPeerException(peerId));
         sendForPeer(peer, Endpoints.QUERY_FORWARD.name(), forward, transportOptions);
     }
 
     private boolean invalidSignature(QueryResponse queryResponse, PeerId queriedPeer) {
         if (queryResponse.signature() == null) {
-            return queryResponse.hash() != null;
+            return queryResponse.messageDetails().messageHash() != null;
         } else {
-            return !checkSignature(queryResponse.hash(), queriedPeer, queryResponse.signature());
+            try {
+                return !checkSignature(queryResponse.messageDetails(), queriedPeer, queryResponse.signature());
+            } catch (JsonProcessingException e) {
+                throw new UncheckedIOException(e);
+            }
         }
     }
 
     private boolean responseMatches(DataMessage message, QueryResponse queryResponse) {
-        return Objects.equals(hash(message.witnessParts(), queryResponse.hashAlgorithm()), queryResponse.hash());
+        return Objects.equals(hash(message.witnessParts(), queryResponse.hashAlgorithm()), queryResponse.messageDetails().messageHash());
     }
 
-    private PeerId getOtherParticipant(List<PeerId> participants, PeerId queriedPeer) {
+    PeerId getOtherParticipant(List<PeerId> participants, PeerId queriedPeer) {
         var other = participants.stream()
                 .filter(id -> !id.equals(id()))
                 .filter(id -> !id.equals(queriedPeer))
@@ -388,7 +399,7 @@ class SimpleNode implements Node {
         return other.getFirst();
     }
 
-    private boolean directCommunication(PeerId peerId, List<PeerId> participants) {
+    boolean directCommunication(PeerId peerId, List<PeerId> participants) {
         var selfPos = participants.indexOf(id());
         if(selfPos == -1) {
             throw new UnsupportedOperationException("Node's id does not support equality checking or was not a participant in the connection");
@@ -452,6 +463,11 @@ class SimpleNode implements Node {
 
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     boolean checkSignature(Object parts, PeerId peerId, Optional<Bytes> signature) throws JsonProcessingException {
+        var data = Bytes.of(objectMapper.writeValueAsBytes(parts));
+        return checkSignature(data, peerId, signature);
+    }
+
+    boolean checkSignature(Object parts, PeerId peerId, Bytes signature) throws JsonProcessingException {
         var data = Bytes.of(objectMapper.writeValueAsBytes(parts));
         return checkSignature(data, peerId, signature);
     }
@@ -646,6 +662,7 @@ class SimpleNode implements Node {
         private ExchangeHandler<QueryRequest, QueryResponse> queryHandler;
         private SendHandler<CloseRequest> closeHandler;
         private SendHandler<MessageForward> messageForwardHandler;
+        private SendHandler<QueryForward> queryForwardHandler;
 
         @Override
         public NodeBuilder id(PeerId id) {
@@ -752,6 +769,12 @@ class SimpleNode implements Node {
         @Override
         public NodeBuilder messageForwardHandler(SendHandler<MessageForward> messageForwardHandler) {
             this.messageForwardHandler = messageForwardHandler;
+            return this;
+        }
+
+        @Override
+        public NodeBuilder queryForwardHandler(SendHandler<QueryForward> queryForwardHandler) {
+            this.queryForwardHandler = queryForwardHandler;
             return this;
         }
 

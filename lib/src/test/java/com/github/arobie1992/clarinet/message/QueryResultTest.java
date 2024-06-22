@@ -11,7 +11,8 @@ class QueryResultTest {
 
     private final PeerId peerId = PeerUtils.senderId();
     private final MessageId messageId = new MessageId(ConnectionId.random(), 0);
-    private final QueryResponse queryResponse = new QueryResponse(null, null, null);
+    private final MessageDetails details = new MessageDetails(messageId, null);
+    private final QueryResponse queryResponse = new QueryResponse(details, null, null);
 
     @Test
     void testNullQueriedPeer() {
