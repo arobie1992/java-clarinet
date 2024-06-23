@@ -23,6 +23,7 @@ import com.github.arobie1992.clarinet.impl.reputation.ProportionalReputationServ
 import com.github.arobie1992.clarinet.message.DataMessage;
 import com.github.arobie1992.clarinet.message.MessageForward;
 import com.github.arobie1992.clarinet.message.MessageId;
+import com.github.arobie1992.clarinet.peer.Address;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.reputation.Assessment;
@@ -49,10 +50,13 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static com.github.arobie1992.clarinet.reputation.Assessment.Status.*;
 
 class IntegrationTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final Address ephemeralAddress = new UriAddress(new URI("tcp://localhost:0"));
+    private final Bytes data = Bytes.of(new byte[]{0, 1, 2, 3, 4});
 
     private Node sender, witness, receiver;
     private CountDownLatch witnessNotificationLatch;
@@ -60,7 +64,7 @@ class IntegrationTest {
     private CountDownLatch witnessCloseLatch;
     private CountDownLatch receiverCloseLatch;
 
-    IntegrationTest() {
+    IntegrationTest() throws URISyntaxException {
         var module = new SimpleModule();
         module.addSerializer(PeerId.class, new PeerIdSerializer());
         module.addSerializer(ConnectionId.class, new ConnectionIdSerializer());
@@ -69,7 +73,7 @@ class IntegrationTest {
     }
 
     @BeforeEach
-    void setUp() throws URISyntaxException, NoSuchAlgorithmException {
+    void setUp() throws NoSuchAlgorithmException {
         sender = Nodes.newBuilder().id(PeerUtils.senderId())
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(PeerUtils.senderId(), TransportUtils.defaultOptions()))
@@ -79,7 +83,6 @@ class IntegrationTest {
                 .messageStore(new InMemoryMessageStore())
                 .keyStore(new InMemoryKeyStore())
                 .build();
-        sender.transport().add(new UriAddress(new URI("tcp://localhost:0")));
         sender.keyStore().addKeyPair(sender.id(), Keys.generateKeyPair());
         sender.keyStore().addProvider(KeyProviders.Sha256RsaPublicKeyProvider());
 
@@ -92,7 +95,6 @@ class IntegrationTest {
                 .messageStore(new InMemoryMessageStore())
                 .keyStore(new InMemoryKeyStore())
                 .build();
-        witness.transport().add(new UriAddress(new URI("tcp://localhost:0")));
         witness.keyStore().addKeyPair(witness.id(), Keys.generateKeyPair());
         witness.keyStore().addProvider(KeyProviders.Sha256RsaPublicKeyProvider());
 
@@ -105,7 +107,6 @@ class IntegrationTest {
                 .messageStore(new InMemoryMessageStore())
                 .keyStore(new InMemoryKeyStore())
                 .build();
-        receiver.transport().add(new UriAddress(new URI("tcp://localhost:0")));
         receiver.keyStore().addKeyPair(receiver.id(), Keys.generateKeyPair());
         receiver.keyStore().addProvider(KeyProviders.Sha256RsaPublicKeyProvider());
 
@@ -149,8 +150,13 @@ class IntegrationTest {
         }
     }
 
-    @Test
-    void testCooperative() throws InterruptedException, JsonProcessingException {
+    private ConnectionId connect(
+            Node sender, Address senderAddress, Node witness, Address witnessAddress, Node receiver, Address receiverAddress
+    ) throws InterruptedException {
+        sender.transport().add(senderAddress);
+        witness.transport().add(witnessAddress);
+        receiver.transport().add(receiverAddress);
+
         sender.peerStore().save(asPeer(receiver));
         sender.peerStore().save(asPeer(witness));
         receiver.addWitnessNotificationHandler(new SendLatchHandler<>(witnessNotificationLatch, WitnessNotification.class));
@@ -166,54 +172,25 @@ class IntegrationTest {
         verifyConnectionPresent(expected, sender);
         verifyConnectionPresent(expected, witness);
         verifyConnectionPresent(expected, receiver);
+        return connectionId;
+    }
 
-        // sending a message
-        var data = Bytes.of(new byte[]{0, 1, 2, 3, 4});
+    private MessageId send(Node sender, ConnectionId connectionId) throws InterruptedException {
         var messageId = sender.send(connectionId, data, TransportUtils.defaultOptions());
         // need latch to ensure test doesn't do verification before the receiver gets the message
         // if it waited all 5 seconds, something's probably wrong and we want to revisit this.
         assertTrue(messageLatch.await(5, TimeUnit.SECONDS));
-        verifyMessage(sender, messageId, 0, data, MessageVerificationMode.SENDER_ONLY);
-        verifyMessage(witness, messageId, 0, data, MessageVerificationMode.SENDER_AND_WITNESS);
-        verifyMessage(receiver, messageId, 0, data, MessageVerificationMode.SENDER_AND_WITNESS);
+        return messageId;
+    }
 
-        verifyAssessment(sender, witness.id(), messageId, Assessment.Status.NONE);
-        verifyAssessment(sender, receiver.id(), messageId, Assessment.Status.NONE);
-        verifyAssessment(witness, sender.id(), messageId, Assessment.Status.REWARD);
-        verifyAssessment(witness, receiver.id(), messageId, Assessment.Status.NONE);
-        verifyAssessment(receiver, sender.id(), messageId, Assessment.Status.REWARD);
-        verifyAssessment(receiver, witness.id(), messageId, Assessment.Status.REWARD);
+    private void query(Node node, PeerId peerId, MessageId messageId, Assessment.Status expectedStatus, double expectedReputation) {
+        var resp = node.query(peerId, messageId, new TransportOptions());
+        node.processQueryResult(resp, new TransportOptions());
+        verifyAssessment(node, peerId, messageId, expectedStatus);
+        verifyReputation(node, peerId, expectedReputation);
+    }
 
-        // sender querying message
-        var resp = sender.query(witness.id(), messageId, new TransportOptions());
-        sender.processQueryResult(resp, new TransportOptions());
-        verifyAssessment(sender, witness.id(), messageId, Assessment.Status.REWARD);
-        verifyReputation(sender, witness.id(), 1);
-        resp = sender.query(receiver.id(), messageId, new TransportOptions());
-        sender.processQueryResult(resp, new TransportOptions());
-        verifyAssessment(sender, receiver.id(), messageId, Assessment.Status.REWARD);
-        verifyReputation(sender, receiver.id(), 1);
-
-        // witness querying message
-        resp = witness.query(sender.id(), messageId, new TransportOptions());
-        witness.processQueryResult(resp, new TransportOptions());
-        verifyAssessment(witness, sender.id(), messageId, Assessment.Status.REWARD);
-        verifyReputation(witness, sender.id(), 1);
-        resp = witness.query(receiver.id(), messageId, new TransportOptions());
-        witness.processQueryResult(resp, new TransportOptions());
-        verifyAssessment(witness, receiver.id(), messageId, Assessment.Status.REWARD);
-        verifyReputation(witness, receiver.id(), 1);
-
-        // receiver querying message
-        resp = receiver.query(sender.id(), messageId, new TransportOptions());
-        receiver.processQueryResult(resp, new TransportOptions());
-        verifyAssessment(receiver, sender.id(), messageId, Assessment.Status.REWARD);
-        verifyReputation(receiver, sender.id(), 1);
-        resp = receiver.query(witness.id(), messageId, new TransportOptions());
-        receiver.processQueryResult(resp, new TransportOptions());
-        verifyAssessment(receiver, witness.id(), messageId, Assessment.Status.REWARD);
-        verifyReputation(receiver, witness.id(), 1);
-
+    private void close(Node sender, ConnectionId connectionId, Node witness, Node receiver) throws InterruptedException {
         witness.addCloseHandler(new SendLatchHandler<>(witnessCloseLatch, CloseRequest.class));
         receiver.addCloseHandler(new SendLatchHandler<>(receiverCloseLatch, CloseRequest.class));
 
@@ -226,10 +203,36 @@ class IntegrationTest {
         verifyConnectionPresent(closedConn, receiver);
     }
 
+    @Test
+    void testCooperative() throws InterruptedException, JsonProcessingException {
+        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress);
+
+        var messageId = send(sender, connectionId);
+        verifyMessage(sender, messageId, 0, data, MessageVerificationMode.SENDER_ONLY);
+        verifyMessage(witness, messageId, 0, data, MessageVerificationMode.SENDER_AND_WITNESS);
+        verifyMessage(receiver, messageId, 0, data, MessageVerificationMode.SENDER_AND_WITNESS);
+
+        verifyAssessment(sender, witness.id(), messageId, NONE);
+        verifyAssessment(sender, receiver.id(), messageId, NONE);
+        verifyAssessment(witness, sender.id(), messageId, REWARD);
+        verifyAssessment(witness, receiver.id(), messageId, NONE);
+        verifyAssessment(receiver, sender.id(), messageId, REWARD);
+        verifyAssessment(receiver, witness.id(), messageId, REWARD);
+
+        query(sender, witness.id(), messageId, REWARD, 1);
+        query(sender, receiver.id(), messageId, REWARD, 1);
+
+        query(witness, sender.id(), messageId, REWARD, 1);
+        query(witness, receiver.id(), messageId, REWARD, 1);
+
+        query(receiver, sender.id(), messageId, REWARD, 1);
+        query(receiver, witness.id(), messageId, REWARD, 1);
+
+        close(sender, connectionId, witness, receiver);
+    }
+
     /*
      TODO items
-     - receiver forwarding message to sender during send when sender signature is invalid
-     - forwarding query
      - allowing configuration in which side picks the witness
      */
 
@@ -240,8 +243,8 @@ class IntegrationTest {
     }
 
     @Test
-    void testMaliciousWitness() throws NoSuchAlgorithmException, URISyntaxException, InterruptedException {
-        witness = new MaliciousNode.MaliciuosNodeBuilder(new MaliciousNode.Configuration.Builder().witnessAlterData(true).build())
+    void testMaliciousWitness() throws NoSuchAlgorithmException, InterruptedException {
+        witness = new MaliciousNode.MaliciuosNodeBuilder(new MaliciousNode.Configuration.Builder().witnessBadSig(true).build())
                 .id(PeerUtils.witnessId())
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(PeerUtils.witnessId(), TransportUtils.defaultOptions()))
@@ -251,57 +254,29 @@ class IntegrationTest {
                 .messageStore(new InMemoryMessageStore())
                 .keyStore(new InMemoryKeyStore())
                 .build();
-        witness.transport().add(new UriAddress(new URI("tcp://localhost:0")));
         witness.keyStore().addKeyPair(witness.id(), Keys.generateKeyPair());
         witness.keyStore().addProvider(KeyProviders.Sha256RsaPublicKeyProvider());
 
-        sender.peerStore().save(asPeer(receiver));
-        sender.peerStore().save(asPeer(witness));
-        receiver.addWitnessNotificationHandler(new SendLatchHandler<>(witnessNotificationLatch, WitnessNotification.class));
-        witness.addWitnessRequestHandler(new RetrieveAddrsWitnessHandler(witness));
-        receiver.addReceiveHandler(new SendLatchHandler<>(messageLatch, DataMessage.class));
-
-        // connection creation
-        var connectionId = sender.connect(receiver.id(), new ConnectionOptions(), TransportUtils.defaultOptions());
-        // need latch to ensure test doesn't do verification before the witness notification handler has executed
-        // if it waited all 5 seconds, something's probably wrong and we want to revisit this.
-        assertTrue(witnessNotificationLatch.await(5, TimeUnit.SECONDS));
+        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress);
 
         var forwardLatch = new CountDownLatch(1);
         sender.addMessageForwardHandler(new SendLatchHandler<>(forwardLatch, MessageForward.class));
 
-        // sending a message
-        var data = Bytes.of(new byte[]{0, 1, 2, 3, 4});
-        var messageId = sender.send(connectionId, data, TransportUtils.defaultOptions());
-        // need latch to ensure test doesn't do verification before the receiver gets the message
-        // if it waited all 5 seconds, something's probably wrong and we want to revisit this.
-        assertTrue(messageLatch.await(5, TimeUnit.SECONDS));
+        var messageId = send(sender, connectionId);
         assertTrue(forwardLatch.await(5, TimeUnit.SECONDS));
 
-        verifyAssessment(sender, witness.id(), messageId, Assessment.Status.STRONG_PENALTY);
-        verifyAssessment(sender, receiver.id(), messageId, Assessment.Status.NONE);
-        verifyAssessment(receiver, sender.id(), messageId, Assessment.Status.WEAK_PENALTY);
-        verifyAssessment(receiver, witness.id(), messageId, Assessment.Status.WEAK_PENALTY);
+        verifyAssessment(sender, witness.id(), messageId, STRONG_PENALTY);
+        verifyAssessment(sender, receiver.id(), messageId, NONE);
+        verifyAssessment(receiver, sender.id(), messageId, WEAK_PENALTY);
+        verifyAssessment(receiver, witness.id(), messageId, WEAK_PENALTY);
 
-        // sender querying message
-        var resp = sender.query(witness.id(), messageId, new TransportOptions());
-        sender.processQueryResult(resp, new TransportOptions());
-        verifyAssessment(sender, witness.id(), messageId, Assessment.Status.STRONG_PENALTY);
-        verifyReputation(sender, witness.id(), 0.25);
-        resp = sender.query(receiver.id(), messageId, new TransportOptions());
-        sender.processQueryResult(resp, new TransportOptions());
-        verifyAssessment(sender, receiver.id(), messageId, Assessment.Status.WEAK_PENALTY);
-        verifyReputation(sender, receiver.id(), 0.5);
+        query(sender, witness.id(), messageId, STRONG_PENALTY, 0.25);
+        query(sender, receiver.id(), messageId, WEAK_PENALTY, 0.5);
 
-        // receiver querying message
-        resp = receiver.query(sender.id(), messageId, new TransportOptions());
-        receiver.processQueryResult(resp, new TransportOptions());
-        verifyAssessment(receiver, sender.id(), messageId, Assessment.Status.WEAK_PENALTY);
-        verifyReputation(receiver, sender.id(), 0.5);
-        resp = receiver.query(witness.id(), messageId, new TransportOptions());
-        receiver.processQueryResult(resp, new TransportOptions());
-        verifyAssessment(receiver, witness.id(), messageId, Assessment.Status.WEAK_PENALTY);
-        verifyReputation(receiver, witness.id(),  0.5);
+        query(receiver, sender.id(), messageId, WEAK_PENALTY, 0.5);
+        query(receiver, witness.id(), messageId, WEAK_PENALTY, 0.5);
+
+        close(sender, connectionId, witness, receiver);
     }
 
     @Disabled

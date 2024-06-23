@@ -30,7 +30,7 @@ public class MaliciousMessageHandlerProxy extends MessageHandlerProxy {
             }
             isWitness = connection.witness().map(id -> id.equals(node.id())).orElse(false);
         }
-        if(isWitness && node.configuration.witnessAlterData()) {
+        if(isWitness && node.configuration.witnessBadSig()) {
             message.setSenderSignature(Bytes.of(new byte[]{106, 117, 110, 107}));
         }
         return super.handle(remoteInformation, message);
