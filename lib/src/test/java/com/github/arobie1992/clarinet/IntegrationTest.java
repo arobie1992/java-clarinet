@@ -241,7 +241,8 @@ class IntegrationTest {
 
     @Test
     void testMaliciousWitness() throws NoSuchAlgorithmException, URISyntaxException, InterruptedException {
-        witness = new MaliciousNode.MaliciuosNodeBuilder().id(PeerUtils.witnessId())
+        witness = new MaliciousNode.MaliciuosNodeBuilder(new MaliciousNode.Configuration.Builder().witnessAlterData(true).build())
+                .id(PeerUtils.witnessId())
                 .peerStore(new InMemoryPeerStore())
                 .transport(() -> new NettyTransport(PeerUtils.witnessId(), TransportUtils.defaultOptions()))
                 .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
