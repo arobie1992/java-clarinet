@@ -6,7 +6,7 @@ import java.util.List;
 
 public class MaliciousNode extends SimpleNode {
     final Configuration configuration;
-    public MaliciousNode(MaliciuosNodeBuilder builder) {
+    public MaliciousNode(Builder builder) {
         super(builder);
         this.configuration = builder.configuration;
         transport.addInternal(
@@ -15,10 +15,10 @@ public class MaliciousNode extends SimpleNode {
         );
     }
 
-    public static class MaliciuosNodeBuilder extends Builder {
+    public static class Builder extends SimpleNode.Builder {
         private final Configuration configuration;
 
-        public MaliciuosNodeBuilder(Configuration configuration) {
+        public Builder(Configuration configuration) {
             this.configuration = configuration;
         }
 
@@ -45,6 +45,8 @@ public class MaliciousNode extends SimpleNode {
             queryForwardAlterData = queryForwardAlterData == null ? List.of() : queryForwardAlterData;
             queryForwardBadSig = queryForwardBadSig == null ? List.of() : queryForwardBadSig;
         }
+        // there's nothing wrong with using the constructor; this is to make only setting specific arguments easier
+        // without having to have every possible constructor permutation
         public static class Builder {
             boolean sendBadSig;
             boolean witnessAlterData;

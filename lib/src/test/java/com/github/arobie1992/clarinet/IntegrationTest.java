@@ -74,41 +74,9 @@ class IntegrationTest {
 
     @BeforeEach
     void setUp() throws NoSuchAlgorithmException {
-        sender = Nodes.newBuilder().id(PeerUtils.senderId())
-                .peerStore(new InMemoryPeerStore())
-                .transport(() -> new NettyTransport(PeerUtils.senderId(), TransportUtils.defaultOptions()))
-                .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
-                .assessmentStore(new InMemoryAssessmentStore())
-                .reputationService(new ProportionalReputationService())
-                .messageStore(new InMemoryMessageStore())
-                .keyStore(new InMemoryKeyStore())
-                .build();
-        sender.keyStore().addKeyPair(sender.id(), Keys.generateKeyPair());
-        sender.keyStore().addProvider(KeyProviders.Sha256RsaPublicKeyProvider());
-
-        witness = Nodes.newBuilder().id(PeerUtils.witnessId())
-                .peerStore(new InMemoryPeerStore())
-                .transport(() -> new NettyTransport(PeerUtils.witnessId(), TransportUtils.defaultOptions()))
-                .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
-                .assessmentStore(new InMemoryAssessmentStore())
-                .reputationService(new ProportionalReputationService())
-                .messageStore(new InMemoryMessageStore())
-                .keyStore(new InMemoryKeyStore())
-                .build();
-        witness.keyStore().addKeyPair(witness.id(), Keys.generateKeyPair());
-        witness.keyStore().addProvider(KeyProviders.Sha256RsaPublicKeyProvider());
-
-        receiver = Nodes.newBuilder().id(PeerUtils.receiverId())
-                .peerStore(new InMemoryPeerStore())
-                .transport(() -> new NettyTransport(PeerUtils.receiverId(), TransportUtils.defaultOptions()))
-                .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
-                .assessmentStore(new InMemoryAssessmentStore())
-                .reputationService(new ProportionalReputationService())
-                .messageStore(new InMemoryMessageStore())
-                .keyStore(new InMemoryKeyStore())
-                .build();
-        receiver.keyStore().addKeyPair(receiver.id(), Keys.generateKeyPair());
-        receiver.keyStore().addProvider(KeyProviders.Sha256RsaPublicKeyProvider());
+        sender = cooperative(PeerUtils.senderId());
+        witness = cooperative(PeerUtils.witnessId());
+        receiver = cooperative(PeerUtils.receiverId());
 
         witnessNotificationLatch = new CountDownLatch(1);
         messageLatch = new CountDownLatch(1);
@@ -148,6 +116,30 @@ class IntegrationTest {
         public Class<WitnessRequest> inputType() {
             return WitnessRequest.class;
         }
+    }
+
+    private Node cooperative(PeerId id) throws NoSuchAlgorithmException {
+        return createNode(id, Nodes.newBuilder());
+    }
+
+    private Node malicious(PeerId id, MaliciousNode.Configuration configuration) throws NoSuchAlgorithmException {
+        return createNode(id, new MaliciousNode.Builder(configuration));
+    }
+
+    private Node createNode(PeerId id, NodeBuilder builder) throws NoSuchAlgorithmException {
+        var node = builder.id(id)
+                .peerStore(new InMemoryPeerStore())
+                .transport(() -> new NettyTransport(id, TransportUtils.defaultOptions()))
+                .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
+                .assessmentStore(new InMemoryAssessmentStore())
+                .reputationService(new ProportionalReputationService())
+                .messageStore(new InMemoryMessageStore())
+                .keyStore(new InMemoryKeyStore())
+                .build();
+
+        node.keyStore().addKeyPair(id, Keys.generateKeyPair());
+        node.keyStore().addProvider(KeyProviders.Sha256RsaPublicKeyProvider());
+        return node;
     }
 
     private ConnectionId connect(
@@ -244,19 +236,7 @@ class IntegrationTest {
 
     @Test
     void testMaliciousWitness() throws NoSuchAlgorithmException, InterruptedException {
-        witness = new MaliciousNode.MaliciuosNodeBuilder(new MaliciousNode.Configuration.Builder().witnessBadSig(true).build())
-                .id(PeerUtils.witnessId())
-                .peerStore(new InMemoryPeerStore())
-                .transport(() -> new NettyTransport(PeerUtils.witnessId(), TransportUtils.defaultOptions()))
-                .trustFilter(TrustFilters.minAndStandardDeviation(0.5))
-                .assessmentStore(new InMemoryAssessmentStore())
-                .reputationService(new ProportionalReputationService())
-                .messageStore(new InMemoryMessageStore())
-                .keyStore(new InMemoryKeyStore())
-                .build();
-        witness.keyStore().addKeyPair(witness.id(), Keys.generateKeyPair());
-        witness.keyStore().addProvider(KeyProviders.Sha256RsaPublicKeyProvider());
-
+        witness = malicious(PeerUtils.witnessId(), new MaliciousNode.Configuration.Builder().witnessBadSig(true).build());
         var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress);
 
         var forwardLatch = new CountDownLatch(1);
