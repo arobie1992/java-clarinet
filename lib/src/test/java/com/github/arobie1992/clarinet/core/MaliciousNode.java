@@ -1,6 +1,9 @@
 package com.github.arobie1992.clarinet.core;
 
+import com.github.arobie1992.clarinet.adt.Bytes;
+import com.github.arobie1992.clarinet.message.DataMessage;
 import com.github.arobie1992.clarinet.peer.PeerId;
+import com.github.arobie1992.clarinet.transport.TransportOptions;
 
 import java.util.List;
 
@@ -14,6 +17,25 @@ public class MaliciousNode extends SimpleNode {
                 new MaliciousMessageHandlerProxy(builder.witnessHandler, builder.receiveHandler, connectionStore, this)
         );
         transport.addInternal(Endpoints.QUERY.name(), new MaliciousQueryHandlerProxy(builder.queryHandler, this));
+    }
+
+    @Override
+    void sendInternal(PeerId peerId, DataMessage message, TransportOptions transportOptions) {
+        if(configuration.sendBadSig()) {
+            var isSender = false;
+            try(var ref = super.connectionStore.findForRead(message.messageId().connectionId())) {
+                if(!(ref instanceof Connection.Readable(Connection connection))) {
+                    throw new NoSuchConnectionException(message.messageId().connectionId());
+                }
+                isSender = connection.sender().equals(id());
+            }
+            if(isSender) {
+                var bytes = message.senderSignature().map(Bytes::bytes).orElse(new byte[]{6, 5, 4});
+                bytes[0] += 1;
+                message.setSenderSignature(Bytes.of(bytes));
+            }
+        }
+        super.sendInternal(peerId, message, transportOptions);
     }
 
     public static class Builder extends SimpleNode.Builder {

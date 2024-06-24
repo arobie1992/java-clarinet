@@ -230,10 +230,67 @@ class IntegrationTest {
      - allowing configuration in which side picks the witness
      */
 
-    @Disabled
     @Test
-    void testMaliciousSender() {
-        fail("implement");
+    void testMaliciousSenderBadSig() throws NoSuchAlgorithmException, InterruptedException {
+        var cfg = MaliciousNode.Configuration.builder().sendBadSig(true).build();
+        sender = malicious(PeerUtils.senderId(), cfg);
+        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress);
+        var messageId = send(sender, connectionId);
+
+        verifyAssessment(witness, sender.id(), messageId, STRONG_PENALTY);
+        verifyAssessment(witness, receiver.id(), messageId, NONE);
+        verifyAssessment(receiver, sender.id(), messageId, WEAK_PENALTY);
+        verifyAssessment(receiver, witness.id(), messageId, WEAK_PENALTY);
+
+        query(witness, sender.id(), messageId, STRONG_PENALTY, 0.25);
+        query(witness, receiver.id(), messageId, REWARD, 1);
+
+        query(receiver, sender.id(), messageId, WEAK_PENALTY, 0.5);
+        query(receiver, witness.id(), messageId, WEAK_PENALTY, 0.5);
+
+        close(sender, connectionId, witness, receiver);
+    }
+
+    @Test
+    void testMaliciousSenderAltersQueryData() throws NoSuchAlgorithmException, InterruptedException {
+        var cfg = MaliciousNode.Configuration.builder().queryAlterData(List.of(witness.id(), receiver.id())).build();
+        sender = malicious(PeerUtils.senderId(), cfg);
+        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress);
+        var messageId = send(sender, connectionId);
+
+        verifyAssessment(witness, sender.id(), messageId, REWARD);
+        verifyAssessment(witness, receiver.id(), messageId, NONE);
+        verifyAssessment(receiver, sender.id(), messageId, REWARD);
+        verifyAssessment(receiver, witness.id(), messageId, REWARD);
+
+        query(witness, sender.id(), messageId, STRONG_PENALTY, 0.25);
+        query(witness, receiver.id(), messageId, REWARD, 1);
+
+        query(receiver, sender.id(), messageId, WEAK_PENALTY, 0.5);
+        query(receiver, witness.id(), messageId, WEAK_PENALTY, 0.5);
+
+        close(sender, connectionId, witness, receiver);
+    }
+
+    @Test
+    void testMaliciousSenderBadQuerySig() throws NoSuchAlgorithmException, InterruptedException {
+        var cfg = MaliciousNode.Configuration.builder().queryBadSig(List.of(witness.id(), receiver.id())).build();
+        sender = malicious(PeerUtils.senderId(), cfg);
+        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress);
+        var messageId = send(sender, connectionId);
+
+        verifyAssessment(witness, sender.id(), messageId, REWARD);
+        verifyAssessment(witness, receiver.id(), messageId, NONE);
+        verifyAssessment(receiver, sender.id(), messageId, REWARD);
+        verifyAssessment(receiver, witness.id(), messageId, REWARD);
+
+        query(witness, sender.id(), messageId, STRONG_PENALTY, 0.25);
+        query(witness, receiver.id(), messageId, REWARD, 1);
+
+        query(receiver, sender.id(), messageId, STRONG_PENALTY, 0.25);
+        query(receiver, witness.id(), messageId, REWARD, 1);
+
+        close(sender, connectionId, witness, receiver);
     }
 
     @Test
@@ -293,6 +350,8 @@ class IntegrationTest {
         verifyReputation(sender, witness.id(), 0.5);
         verifyAssessment(sender, receiver.id(), messageId, WEAK_PENALTY);
         verifyReputation(sender, receiver.id(), 0.5);
+
+        close(sender, connectionId, witness, receiver);
     }
 
     @Disabled
