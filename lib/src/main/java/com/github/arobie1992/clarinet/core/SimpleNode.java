@@ -643,6 +643,22 @@ class SimpleNode implements Node {
         );
     }
 
+    @Override
+    public void addQueryForwardHandler(SendHandler<QueryForward> queryForwardHandler) {
+        this.transport.addInternal(
+                Endpoints.QUERY_FORWARD.name(),
+                new QueryForwardHandlerProxy(queryForwardHandler, connectionStore, this)
+        );
+    }
+
+    @Override
+    public void removeQueryForwardHandler() {
+        this.transport.addInternal(
+                Endpoints.QUERY_FORWARD.name(),
+                new QueryForwardHandlerProxy(null, connectionStore, this)
+        );
+    }
+
     static class Builder implements NodeBuilder {
         private PeerId id;
         private PeerStore peerStore;
@@ -659,7 +675,7 @@ class SimpleNode implements Node {
         SendHandler<DataMessage> receiveHandler;
         private ExchangeHandler<PeersRequest, PeersResponse> peersRequestHandler;
         private ExchangeHandler<KeysRequest, KeysResponse> keysRequestHandler;
-        private ExchangeHandler<QueryRequest, QueryResponse> queryHandler;
+        ExchangeHandler<QueryRequest, QueryResponse> queryHandler;
         private SendHandler<CloseRequest> closeHandler;
         private SendHandler<MessageForward> messageForwardHandler;
         private SendHandler<QueryForward> queryForwardHandler;

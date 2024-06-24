@@ -62,13 +62,13 @@ class QueryForwardHandlerProxy implements SendHandler<QueryForward> {
             var assessment = node.assessmentStore().find(message.queriedPeer(), resp.messageDetails().messageId());
             node.assessmentStore().save(assessment.updateStatus(Assessment.Status.REWARD), node.reputationService()::update);
         } else {
-            if(node.directCommunication(remoteInformation.peer().id(), participants)) {
+            if(node.directCommunication(message.queriedPeer(), participants)) {
                 var assessment = node.assessmentStore().find(message.queriedPeer(), resp.messageDetails().messageId());
                 node.assessmentStore().save(assessment.updateStatus(Assessment.Status.STRONG_PENALTY), node.reputationService()::update);
             } else {
                 var assessment = node.assessmentStore().find(message.queriedPeer(), resp.messageDetails().messageId());
                 node.assessmentStore().save(assessment.updateStatus(Assessment.Status.WEAK_PENALTY), node.reputationService()::update);
-                var otherParticipant = node.getOtherParticipant(participants, remoteInformation.peer().id());
+                var otherParticipant = node.getOtherParticipant(participants, message.queriedPeer());
                 var otherAssessment = node.assessmentStore().find(otherParticipant, resp.messageDetails().messageId());
                 node.assessmentStore().save(otherAssessment.updateStatus(Assessment.Status.WEAK_PENALTY), node.reputationService()::update);
             }

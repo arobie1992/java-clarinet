@@ -23,6 +23,7 @@ import com.github.arobie1992.clarinet.impl.reputation.ProportionalReputationServ
 import com.github.arobie1992.clarinet.message.DataMessage;
 import com.github.arobie1992.clarinet.message.MessageForward;
 import com.github.arobie1992.clarinet.message.MessageId;
+import com.github.arobie1992.clarinet.message.QueryForward;
 import com.github.arobie1992.clarinet.peer.Address;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.peer.PeerId;
@@ -45,6 +46,7 @@ import java.net.URISyntaxException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -236,7 +238,7 @@ class IntegrationTest {
 
     @Test
     void testMaliciousWitness() throws NoSuchAlgorithmException, InterruptedException {
-        witness = malicious(PeerUtils.witnessId(), new MaliciousNode.Configuration.Builder().witnessBadSig(true).build());
+        witness = malicious(PeerUtils.witnessId(), MaliciousNode.Configuration.builder().witnessBadSig(true).build());
         var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress);
 
         var forwardLatch = new CountDownLatch(1);
@@ -259,10 +261,38 @@ class IntegrationTest {
         close(sender, connectionId, witness, receiver);
     }
 
-    @Disabled
     @Test
-    void testMaliciousReceiver() {
-        fail("implement");
+    void testMaliciousReceiver() throws NoSuchAlgorithmException, InterruptedException {
+        // need to alter data and not do a bad sig because we want the witness to forward to the sender to test that out
+        var cfg = MaliciousNode.Configuration.builder().queryAlterData(List.of(witness.id())).build();
+        receiver = malicious(PeerUtils.receiverId(), cfg);
+        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress);
+        var messageId = send(sender, connectionId);
+
+        verifyAssessment(sender, witness.id(), messageId, NONE);
+        verifyAssessment(sender, receiver.id(), messageId, NONE);
+        verifyAssessment(witness, sender.id(), messageId, REWARD);
+        verifyAssessment(witness, receiver.id(), messageId, NONE);
+
+        query(sender, witness.id(), messageId, REWARD, 1);
+        query(sender, receiver.id(), messageId, REWARD, 1);
+
+        query(witness, sender.id(), messageId, REWARD, 1);
+
+        var queryForwardLatch = new CountDownLatch(1);
+        sender.addQueryForwardHandler(new SendLatchHandler<>(queryForwardLatch, QueryForward.class));
+        query(witness, receiver.id(), messageId, STRONG_PENALTY, 0.25);
+        assertTrue(queryForwardLatch.await(5000, TimeUnit.SECONDS));
+        /* Witness should have forwarded this to the sender and sender should interpret this as a weak penalty to both
+           since by the current rules it cannot be sure if the witness forwarded incorrectly or if the receiver is lying
+           in a more robust reputation scheme, the sender might be able to make extrapolations to not penalize the witness
+           because it had already queried and seen that the receiver did in fact receive the correct message but is lying
+           to the witness. That said, I don't think this should come up a ton since the receiver would likely want to
+           deceive both so would report the same to each. */
+        verifyAssessment(sender, witness.id(), messageId, WEAK_PENALTY);
+        verifyReputation(sender, witness.id(), 0.5);
+        verifyAssessment(sender, receiver.id(), messageId, WEAK_PENALTY);
+        verifyReputation(sender, receiver.id(), 0.5);
     }
 
     @Disabled

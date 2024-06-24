@@ -127,7 +127,7 @@ class QueryForwardHandlerProxyTest {
 
     @Test
     void testHashesNotMatchDirectCommunication() {
-        when(node.directCommunication(remoteInformation.peer().id(), connection.participants())).thenReturn(true);
+        when(node.directCommunication(queryForward.queriedPeer(), connection.participants())).thenReturn(true);
         var diff = Bytes.of(new byte[]{17});
         assertNotEquals(queryResponse.signature(), diff);
         when(node.hash(dataMessage.witnessParts(), queryResponse.hashAlgorithm())).thenReturn(diff);
@@ -139,7 +139,7 @@ class QueryForwardHandlerProxyTest {
     @Test
     void testHashesNotMatchIndirectCommunication() {
         when(node.directCommunication(remoteInformation.peer().id(), connection.participants())).thenReturn(false);
-        when(node.getOtherParticipant(connection.participants(), remoteInformation.peer().id())).thenReturn(remoteInformation.peer().id());
+        when(node.getOtherParticipant(connection.participants(), queryForward.queriedPeer())).thenReturn(remoteInformation.peer().id());
         var diff = Bytes.of(new byte[]{17});
         assertNotEquals(queryResponse.signature(), diff);
         when(node.hash(dataMessage.witnessParts(), queryResponse.hashAlgorithm())).thenReturn(diff);

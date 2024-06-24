@@ -13,6 +13,7 @@ public class MaliciousNode extends SimpleNode {
                 Endpoints.MESSAGE.name(),
                 new MaliciousMessageHandlerProxy(builder.witnessHandler, builder.receiveHandler, connectionStore, this)
         );
+        transport.addInternal(Endpoints.QUERY.name(), new MaliciousQueryHandlerProxy(builder.queryHandler, this));
     }
 
     public static class Builder extends SimpleNode.Builder {
@@ -45,6 +46,11 @@ public class MaliciousNode extends SimpleNode {
             queryForwardAlterData = queryForwardAlterData == null ? List.of() : queryForwardAlterData;
             queryForwardBadSig = queryForwardBadSig == null ? List.of() : queryForwardBadSig;
         }
+
+        public static Builder builder() {
+            return new Builder();
+        }
+
         // there's nothing wrong with using the constructor; this is to make only setting specific arguments easier
         // without having to have every possible constructor permutation
         public static class Builder {
