@@ -44,10 +44,7 @@ import org.junit.jupiter.api.Test;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.NoSuchAlgorithmException;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -120,6 +117,26 @@ class IntegrationTest {
         }
     }
 
+    private record RetrieveAddrsWitnessNotificationHandler(Node node, CountDownLatch latch) implements SendHandler<WitnessNotification> {
+        @Override
+        public None<Void> handle(RemoteInformation remoteInformation, WitnessNotification message) {
+            if (needsAddress(message.witness())) {
+                node.requestPeers(remoteInformation.peer().id(), new PeersRequest(Set.of(message.witness())), new TransportOptions())
+                        .peers()
+                        .forEach(node.peerStore()::save);
+            }
+            latch.countDown();
+            return new None<>();
+        }
+        private boolean needsAddress(PeerId peerId) {
+            return node.peerStore().find(peerId).map(p -> p.addresses().isEmpty()).orElse(true);
+        }
+        @Override
+        public Class<WitnessNotification> inputType() {
+            return WitnessNotification.class;
+        }
+    }
+
     private Node cooperative(PeerId id) throws NoSuchAlgorithmException {
         return createNode(id, Nodes.newBuilder());
     }
@@ -145,20 +162,32 @@ class IntegrationTest {
     }
 
     private ConnectionId connect(
-            Node sender, Address senderAddress, Node witness, Address witnessAddress, Node receiver, Address receiverAddress
+            Node sender,
+            Address senderAddress,
+            Node witness, Address witnessAddress,
+            Node receiver, Address receiverAddress,
+            PeerId witnessSelector
     ) throws InterruptedException {
         sender.transport().add(senderAddress);
         witness.transport().add(witnessAddress);
         receiver.transport().add(receiverAddress);
 
         sender.peerStore().save(asPeer(receiver));
-        sender.peerStore().save(asPeer(witness));
-        receiver.addWitnessNotificationHandler(new SendLatchHandler<>(witnessNotificationLatch, WitnessNotification.class));
+        if(!witnessSelector.equals(sender.id()) && !witnessSelector.equals(receiver.id())) {
+           throw new IllegalArgumentException("Right now testing only supports sender or receiver being witness selector.");
+        }
+        if(sender.id().equals(witnessSelector)) {
+            sender.peerStore().save(asPeer(witness));
+            receiver.addWitnessNotificationHandler(new SendLatchHandler<>(witnessNotificationLatch, WitnessNotification.class));
+        } else {
+            sender.addWitnessNotificationHandler(new RetrieveAddrsWitnessNotificationHandler(sender, witnessNotificationLatch));
+            receiver.peerStore().save(asPeer(witness));
+        }
         witness.addWitnessRequestHandler(new RetrieveAddrsWitnessHandler(witness));
         receiver.addReceiveHandler(new SendLatchHandler<>(messageLatch, DataMessage.class));
 
         // connection creation
-        var connectionId = sender.connect(receiver.id(), new ConnectionOptions(), TransportUtils.defaultOptions());
+        var connectionId = sender.connect(receiver.id(), new ConnectionOptions(witnessSelector), TransportUtils.defaultOptions());
         var expected = new TestConnection(connectionId, sender.id(), Optional.of(witness.id()), receiver.id(), Connection.Status.OPEN);
         // need latch to ensure test doesn't do verification before the witness notification handler has executed
         // if it waited all 5 seconds, something's probably wrong and we want to revisit this.
@@ -199,7 +228,7 @@ class IntegrationTest {
 
     @Test
     void testCooperative() throws InterruptedException, JsonProcessingException {
-        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress);
+        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress, sender.id());
 
         var messageId = send(sender, connectionId);
         verifyMessage(sender, messageId, 0, data, MessageVerificationMode.SENDER_ONLY);
@@ -225,6 +254,35 @@ class IntegrationTest {
         close(sender, connectionId, witness, receiver);
     }
 
+    @Test
+    void testCooperativeReceiverSelectsWitness() throws InterruptedException, JsonProcessingException {
+        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress, receiver.id());
+
+        var messageId = send(sender, connectionId);
+        verifyMessage(sender, messageId, 0, data, MessageVerificationMode.SENDER_ONLY);
+        verifyMessage(witness, messageId, 0, data, MessageVerificationMode.SENDER_AND_WITNESS);
+        verifyMessage(receiver, messageId, 0, data, MessageVerificationMode.SENDER_AND_WITNESS);
+
+        verifyAssessment(sender, witness.id(), messageId, NONE);
+        verifyAssessment(sender, receiver.id(), messageId, NONE);
+        verifyAssessment(witness, sender.id(), messageId, REWARD);
+        verifyAssessment(witness, receiver.id(), messageId, NONE);
+        verifyAssessment(receiver, sender.id(), messageId, REWARD);
+        verifyAssessment(receiver, witness.id(), messageId, REWARD);
+
+        query(sender, witness.id(), messageId, REWARD, 1);
+        query(sender, receiver.id(), messageId, REWARD, 1);
+
+        query(witness, sender.id(), messageId, REWARD, 1);
+        query(witness, receiver.id(), messageId, REWARD, 1);
+
+        query(receiver, sender.id(), messageId, REWARD, 1);
+        query(receiver, witness.id(), messageId, REWARD, 1);
+
+        close(sender, connectionId, witness, receiver);
+    }
+
+
     /*
      TODO items
      - allowing configuration in which side picks the witness
@@ -234,7 +292,7 @@ class IntegrationTest {
     void testMaliciousSenderBadSig() throws NoSuchAlgorithmException, InterruptedException {
         var cfg = MaliciousNode.Configuration.builder().sendBadSig(true).build();
         sender = malicious(PeerUtils.senderId(), cfg);
-        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress);
+        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress, sender.id());
         var messageId = send(sender, connectionId);
 
         verifyAssessment(witness, sender.id(), messageId, STRONG_PENALTY);
@@ -255,7 +313,7 @@ class IntegrationTest {
     void testMaliciousSenderAltersQueryData() throws NoSuchAlgorithmException, InterruptedException {
         var cfg = MaliciousNode.Configuration.builder().queryAlterData(List.of(witness.id(), receiver.id())).build();
         sender = malicious(PeerUtils.senderId(), cfg);
-        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress);
+        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress, sender.id());
         var messageId = send(sender, connectionId);
 
         verifyAssessment(witness, sender.id(), messageId, REWARD);
@@ -276,7 +334,7 @@ class IntegrationTest {
     void testMaliciousSenderBadQuerySig() throws NoSuchAlgorithmException, InterruptedException {
         var cfg = MaliciousNode.Configuration.builder().queryBadSig(List.of(witness.id(), receiver.id())).build();
         sender = malicious(PeerUtils.senderId(), cfg);
-        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress);
+        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress, sender.id());
         var messageId = send(sender, connectionId);
 
         verifyAssessment(witness, sender.id(), messageId, REWARD);
@@ -296,7 +354,7 @@ class IntegrationTest {
     @Test
     void testMaliciousWitness() throws NoSuchAlgorithmException, InterruptedException {
         witness = malicious(PeerUtils.witnessId(), MaliciousNode.Configuration.builder().witnessBadSig(true).build());
-        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress);
+        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress, sender.id());
 
         var forwardLatch = new CountDownLatch(1);
         sender.addMessageForwardHandler(new SendLatchHandler<>(forwardLatch, MessageForward.class));
@@ -323,7 +381,7 @@ class IntegrationTest {
         // need to alter data and not do a bad sig because we want the witness to forward to the sender to test that out
         var cfg = MaliciousNode.Configuration.builder().queryAlterData(List.of(witness.id())).build();
         receiver = malicious(PeerUtils.receiverId(), cfg);
-        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress);
+        var connectionId = connect(sender, ephemeralAddress, witness, ephemeralAddress, receiver, ephemeralAddress, sender.id());
         var messageId = send(sender, connectionId);
 
         verifyAssessment(sender, witness.id(), messageId, NONE);

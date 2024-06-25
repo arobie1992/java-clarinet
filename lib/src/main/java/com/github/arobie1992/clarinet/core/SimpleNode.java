@@ -194,7 +194,7 @@ class SimpleNode implements Node {
             ConnectResponse connectResponse = exchangeForPeer(
                     peer,
                     Endpoints.CONNECT.name(),
-                    new ConnectRequest(connectionId, id()),
+                    new ConnectRequest(connectionId, id(), connectionOptions),
                     ConnectResponse.class,
                     transportOptions
             ).findFirst().orElseThrow(ConnectFailureException::new);
@@ -203,46 +203,55 @@ class SimpleNode implements Node {
                 throw new ConnectRejectedException(connectResponse.reason());
             }
 
-            record PeerAndResponse(Peer peer, WitnessResponse witnessResponse) {}
-            Predicate<PeerAndResponse> byRejected = par -> {
-                if(par.witnessResponse.rejected()) {
-                    // see about adding a handler here as well
-                    log.info("Witness {} rejected due to reason: {}", par.peer.id(), par.witnessResponse.reason());
-                    return false;
-                } else {
-                    return true;
-                }
-            };
+            if(id.equals(connectionOptions.witnessSelector())) {
+                selectWitness(peer, connection, transportOptions);
+            } else {
+                connection.setStatus(Connection.Status.AWAITING_WITNESS);
+            }
 
-            // filter out this node itself and the receiver
-            var witness = trustFilter.apply(
-                            peerStore.all().filter(pid -> !id.equals(pid) && !receiver.equals(pid)),
-                            reputationService::get
-                    ).map(peerStore::find)
-                    .filter(Optional::isPresent)
-                    .map(Optional::get)
-                    .map(p -> exchangeForPeer(
-                            p,
-                            Endpoints.WITNESS.name(),
-                            new WitnessRequest(connectionId, id(), receiver), WitnessResponse.class, transportOptions
-                    ).map(wr -> new PeerAndResponse(p, wr)))
-                    .flatMap(r -> r.filter(par -> par.witnessResponse != null))
-                    .filter(byRejected)
-                    .map(par -> par.peer)
-                    .findFirst()
-                    .orElseThrow(WitnessSelectionException::new);
-
-            connection.setWitness(witness.id());
-            connection.setStatus(Connection.Status.NOTIFYING_OF_WITNESS);
-
-            sendForPeer(peer, Endpoints.WITNESS_NOTIFICATION.name(), new WitnessNotification(connectionId, witness.id()), transportOptions);
-            /*
-             sendForPeer only returns if the send was successful as near as this side can tell, so will only reach this part
-             if it seems successful.
-             */
-            connection.setStatus(Connection.Status.OPEN);
             return connectionId;
         }
+    }
+
+    void selectWitness(Peer peerToNotify, ConnectionImpl connection, TransportOptions transportOptions) {
+        record PeerAndResponse(Peer peer, WitnessResponse witnessResponse) {}
+        Predicate<PeerAndResponse> byRejected = par -> {
+            if(par.witnessResponse.rejected()) {
+                // see about adding a handler here as well
+                log.info("Witness {} rejected due to reason: {}", par.peer.id(), par.witnessResponse.reason());
+                return false;
+            } else {
+                return true;
+            }
+        };
+
+        var sender = connection.sender();
+        var receiver = connection.receiver();
+
+        var witness = trustFilter.apply(
+                        // filter out sender and receiver because they aren't eligible
+                        peerStore.all().filter(pid -> !sender.equals(pid) && !receiver.equals(pid)),
+                        reputationService::get
+                ).map(peerStore::find)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(p -> {
+                    var req = new WitnessRequest(connection.id(), sender, receiver);
+                    return exchangeForPeer(p, Endpoints.WITNESS.name(), req, WitnessResponse.class, transportOptions)
+                            .map(wr -> new PeerAndResponse(p, wr));
+                }).flatMap(r -> r.filter(par -> par.witnessResponse != null))
+                .filter(byRejected)
+                .map(par -> par.peer)
+                .findFirst()
+                .orElseThrow(WitnessSelectionException::new);
+        connection.setWitness(witness.id());
+        connection.setStatus(Connection.Status.NOTIFYING_OF_WITNESS);
+
+        var req = new WitnessNotification(connection.id(), witness.id());
+        sendForPeer(peerToNotify, Endpoints.WITNESS_NOTIFICATION.name(), req, transportOptions);
+        /* sendForPeer only returns if the send was successful as near as this side can tell, so will only reach
+           this part if it seems successful. */
+        connection.setStatus(Connection.Status.OPEN);
     }
 
     Bytes genSignature(Object parts) {
