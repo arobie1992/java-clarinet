@@ -282,12 +282,6 @@ class IntegrationTest {
         close(sender, connectionId, witness, receiver);
     }
 
-
-    /*
-     TODO items
-     - allowing configuration in which side picks the witness
-     */
-
     @Test
     void testMaliciousSenderBadSig() throws NoSuchAlgorithmException, InterruptedException {
         var cfg = MaliciousNode.Configuration.builder().sendBadSig(true).build();
