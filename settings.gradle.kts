@@ -11,4 +11,4 @@ plugins {
 }
 
 rootProject.name = "java-clarinet"
-include("lib")
+include("lib", "app")
