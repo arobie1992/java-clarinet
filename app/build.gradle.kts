@@ -17,7 +17,9 @@ repositories {
 }
 
 dependencies {
+    implementation("com.google.cloud:google-cloud-firestore:3.21.5")
     implementation(project(":lib"))
+
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
