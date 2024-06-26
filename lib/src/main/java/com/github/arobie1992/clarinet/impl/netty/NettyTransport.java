@@ -70,6 +70,7 @@ public class NettyTransport implements Transport, AutoCloseable {
         module.addSerializer(ConnectionId.class, new ConnectionIdSerializer());
         module.addSerializer(DataMessage.class, new DataMessageSerializer());
         module.addSerializer(Address.class, new AddressSerializer());
+        module.addDeserializer(ConnectionId.class, new ConnectionIdDeserializer());
         module.addDeserializer(PeerId.class, new PeerIdDeserializer());
         module.addDeserializer(Address.class, new AddressDeserializer());
         objectMapper.registerModule(module);

@@ -26,7 +26,10 @@ import java.io.UncheckedIOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.util.*;
+import java.util.Collection;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -79,6 +82,10 @@ class SimpleNode implements Node {
         this.transport.addInternal(
                 Endpoints.MESSAGE_FORWARD.name(),
                 new MessageForwardHandlerProxy(builder.messageForwardHandler, connectionStore, this)
+        );
+        this.transport.addInternal(
+                Endpoints.QUERY_FORWARD.name(),
+                new QueryForwardHandlerProxy(builder.queryForwardHandler, connectionStore, this)
         );
 
         this.trustFilter = Objects.requireNonNull(builder.trustFilter);
@@ -187,7 +194,7 @@ class SimpleNode implements Node {
             ConnectResponse connectResponse = exchangeForPeer(
                     peer,
                     Endpoints.CONNECT.name(),
-                    new ConnectRequest(connectionId, id()),
+                    new ConnectRequest(connectionId, id(), connectionOptions),
                     ConnectResponse.class,
                     transportOptions
             ).findFirst().orElseThrow(ConnectFailureException::new);
@@ -196,46 +203,57 @@ class SimpleNode implements Node {
                 throw new ConnectRejectedException(connectResponse.reason());
             }
 
-            record PeerAndResponse(Peer peer, WitnessResponse witnessResponse) {}
-            Predicate<PeerAndResponse> byRejected = par -> {
-                if(par.witnessResponse.rejected()) {
-                    // see about adding a handler here as well
-                    log.info("Witness {} rejected due to reason: {}", par.peer.id(), par.witnessResponse.reason());
-                    return false;
-                } else {
-                    return true;
-                }
-            };
+            if(id.equals(connectionOptions.witnessSelector())) {
+                selectWitness(peer, connection, transportOptions);
+            } else {
+                connection.setStatus(Connection.Status.AWAITING_WITNESS);
+            }
 
-            // filter out this node itself and the receiver
-            var witness = trustFilter.apply(
-                            peerStore.all().filter(pid -> !id.equals(pid) && !receiver.equals(pid)),
-                            reputationService::get
-                    ).map(peerStore::find)
-                    .filter(Optional::isPresent)
-                    .map(Optional::get)
-                    .map(p -> exchangeForPeer(
-                            p,
-                            Endpoints.WITNESS.name(),
-                            new WitnessRequest(connectionId, id(), receiver), WitnessResponse.class, transportOptions
-                    ).map(wr -> new PeerAndResponse(p, wr)))
-                    .flatMap(r -> r.filter(par -> par.witnessResponse != null))
-                    .filter(byRejected)
-                    .map(par -> par.peer)
-                    .findFirst()
-                    .orElseThrow(WitnessSelectionException::new);
-
-            connection.setWitness(witness.id());
-            connection.setStatus(Connection.Status.NOTIFYING_OF_WITNESS);
-
-            sendForPeer(peer, Endpoints.WITNESS_NOTIFICATION.name(), new WitnessNotification(connectionId, witness.id()), transportOptions);
-            /*
-             sendForPeer only returns if the send was successful as near as this side can tell, so will only reach this part
-             if it seems successful.
-             */
-            connection.setStatus(Connection.Status.OPEN);
             return connectionId;
         }
+    }
+
+    void selectWitness(Peer peerToNotify, ConnectionImpl connection, TransportOptions transportOptions) {
+        connection.setStatus(Connection.Status.REQUESTING_WITNESS);
+
+        record PeerAndResponse(Peer peer, WitnessResponse witnessResponse) {}
+        Predicate<PeerAndResponse> byRejected = par -> {
+            if(par.witnessResponse.rejected()) {
+                // see about adding a handler here as well
+                log.info("Witness {} rejected due to reason: {}", par.peer.id(), par.witnessResponse.reason());
+                return false;
+            } else {
+                return true;
+            }
+        };
+
+        var sender = connection.sender();
+        var receiver = connection.receiver();
+
+        var witness = trustFilter.apply(
+                        // filter out sender and receiver because they aren't eligible
+                        peerStore.all().filter(pid -> !sender.equals(pid) && !receiver.equals(pid)),
+                        reputationService::get
+                ).map(peerStore::find)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(p -> {
+                    var req = new WitnessRequest(connection.id(), sender, receiver);
+                    return exchangeForPeer(p, Endpoints.WITNESS.name(), req, WitnessResponse.class, transportOptions)
+                            .map(wr -> new PeerAndResponse(p, wr));
+                }).flatMap(r -> r.filter(par -> par.witnessResponse != null))
+                .filter(byRejected)
+                .map(par -> par.peer)
+                .findFirst()
+                .orElseThrow(WitnessSelectionException::new);
+        connection.setWitness(witness.id());
+        connection.setStatus(Connection.Status.NOTIFYING_OF_WITNESS);
+
+        var req = new WitnessNotification(connection.id(), witness.id());
+        sendForPeer(peerToNotify, Endpoints.WITNESS_NOTIFICATION.name(), req, transportOptions);
+        /* sendForPeer only returns if the send was successful as near as this side can tell, so will only reach
+           this part if it seems successful. */
+        connection.setStatus(Connection.Status.OPEN);
     }
 
     Bytes genSignature(Object parts) {
@@ -332,10 +350,10 @@ class SimpleNode implements Node {
             assessment = assessment.updateStatus(Assessment.Status.STRONG_PENALTY);
             validSig = false;
         } else if(!participants.contains(queryResult.queriedPeer())) {
-            forward(otherParticipant, resp, transportOptions);
+            forward(otherParticipant, queryResult, transportOptions);
             return false;
         } else if(messageOpt.isEmpty()) {
-            forward(otherParticipant, resp, transportOptions);
+            forward(otherParticipant, queryResult, transportOptions);
             return false;
         } else if(!responseMatches(messageOpt.get(), queryResult.queryResponse())) {
             if(directCommunication(queryResult.queriedPeer(), participants)) {
@@ -351,31 +369,35 @@ class SimpleNode implements Node {
         }
         assessmentStore.save(assessment, reputationService::update);
         if(validSig) {
-            forward(otherParticipant, resp, transportOptions);
+            forward(otherParticipant, queryResult, transportOptions);
         }
         return true;
     }
 
-    private void forward(PeerId peerId, QueryResponse queryResponse, TransportOptions transportOptions) {
-        var sig = genSignature(queryResponse);
-        var forward = new QueryForward(queryResponse, sig);
+    private void forward(PeerId peerId, QueryResult queryResult, TransportOptions transportOptions) {
+        var sig = genSignature(queryResult.queryResponse());
+        var forward = new QueryForward(queryResult.queriedPeer(), queryResult.queryResponse(), sig);
         var peer = peerStore.find(peerId).orElseThrow(() -> new NoSuchPeerException(peerId));
         sendForPeer(peer, Endpoints.QUERY_FORWARD.name(), forward, transportOptions);
     }
 
     private boolean invalidSignature(QueryResponse queryResponse, PeerId queriedPeer) {
         if (queryResponse.signature() == null) {
-            return queryResponse.hash() != null;
+            return queryResponse.messageDetails().messageHash() != null;
         } else {
-            return !checkSignature(queryResponse.hash(), queriedPeer, queryResponse.signature());
+            try {
+                return !checkSignature(queryResponse.messageDetails(), queriedPeer, queryResponse.signature());
+            } catch (JsonProcessingException e) {
+                throw new UncheckedIOException(e);
+            }
         }
     }
 
     private boolean responseMatches(DataMessage message, QueryResponse queryResponse) {
-        return Objects.equals(hash(message.witnessParts(), queryResponse.hashAlgorithm()), queryResponse.hash());
+        return Objects.equals(hash(message.witnessParts(), queryResponse.hashAlgorithm()), queryResponse.messageDetails().messageHash());
     }
 
-    private PeerId getOtherParticipant(List<PeerId> participants, PeerId queriedPeer) {
+    PeerId getOtherParticipant(List<PeerId> participants, PeerId queriedPeer) {
         var other = participants.stream()
                 .filter(id -> !id.equals(id()))
                 .filter(id -> !id.equals(queriedPeer))
@@ -388,7 +410,7 @@ class SimpleNode implements Node {
         return other.getFirst();
     }
 
-    private boolean directCommunication(PeerId peerId, List<PeerId> participants) {
+    boolean directCommunication(PeerId peerId, List<PeerId> participants) {
         var selfPos = participants.indexOf(id());
         if(selfPos == -1) {
             throw new UnsupportedOperationException("Node's id does not support equality checking or was not a participant in the connection");
@@ -452,6 +474,11 @@ class SimpleNode implements Node {
 
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     boolean checkSignature(Object parts, PeerId peerId, Optional<Bytes> signature) throws JsonProcessingException {
+        var data = Bytes.of(objectMapper.writeValueAsBytes(parts));
+        return checkSignature(data, peerId, signature);
+    }
+
+    boolean checkSignature(Object parts, PeerId peerId, Bytes signature) throws JsonProcessingException {
         var data = Bytes.of(objectMapper.writeValueAsBytes(parts));
         return checkSignature(data, peerId, signature);
     }
@@ -627,6 +654,22 @@ class SimpleNode implements Node {
         );
     }
 
+    @Override
+    public void addQueryForwardHandler(SendHandler<QueryForward> queryForwardHandler) {
+        this.transport.addInternal(
+                Endpoints.QUERY_FORWARD.name(),
+                new QueryForwardHandlerProxy(queryForwardHandler, connectionStore, this)
+        );
+    }
+
+    @Override
+    public void removeQueryForwardHandler() {
+        this.transport.addInternal(
+                Endpoints.QUERY_FORWARD.name(),
+                new QueryForwardHandlerProxy(null, connectionStore, this)
+        );
+    }
+
     static class Builder implements NodeBuilder {
         private PeerId id;
         private PeerStore peerStore;
@@ -643,9 +686,10 @@ class SimpleNode implements Node {
         SendHandler<DataMessage> receiveHandler;
         private ExchangeHandler<PeersRequest, PeersResponse> peersRequestHandler;
         private ExchangeHandler<KeysRequest, KeysResponse> keysRequestHandler;
-        private ExchangeHandler<QueryRequest, QueryResponse> queryHandler;
+        ExchangeHandler<QueryRequest, QueryResponse> queryHandler;
         private SendHandler<CloseRequest> closeHandler;
         private SendHandler<MessageForward> messageForwardHandler;
+        private SendHandler<QueryForward> queryForwardHandler;
 
         @Override
         public NodeBuilder id(PeerId id) {
@@ -752,6 +796,12 @@ class SimpleNode implements Node {
         @Override
         public NodeBuilder messageForwardHandler(SendHandler<MessageForward> messageForwardHandler) {
             this.messageForwardHandler = messageForwardHandler;
+            return this;
+        }
+
+        @Override
+        public NodeBuilder queryForwardHandler(SendHandler<QueryForward> queryForwardHandler) {
+            this.queryForwardHandler = queryForwardHandler;
             return this;
         }
 

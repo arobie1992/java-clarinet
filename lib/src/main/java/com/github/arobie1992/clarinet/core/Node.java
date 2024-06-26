@@ -137,4 +137,8 @@ public interface Node {
     void addMessageForwardHandler(SendHandler<MessageForward> messageForwardHandler);
 
     void removeMessageForwardHandler();
+
+    void addQueryForwardHandler(SendHandler<QueryForward> queryForwardHandler);
+
+    void removeQueryForwardHandler();
 }

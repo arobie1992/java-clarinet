@@ -7,6 +7,7 @@ import com.github.arobie1992.clarinet.testutils.AddressUtils;
 import com.github.arobie1992.clarinet.testutils.PeerUtils;
 import com.github.arobie1992.clarinet.transport.ExchangeHandler;
 import com.github.arobie1992.clarinet.transport.RemoteInformation;
+import com.github.arobie1992.clarinet.transport.TransportOptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -23,18 +24,22 @@ class ConnectHandlerProxyTest {
             new Peer(PeerUtils.senderId(), new HashSet<>(Set.of(AddressUtils.defaultAddress()))),
             AddressUtils.defaultAddress()
     );
-    private final ConnectRequest connectRequest = new ConnectRequest(ConnectionId.random(), PeerUtils.senderId());
+    private final ConnectRequest connectRequest = new ConnectRequest(
+            ConnectionId.random(),
+            PeerUtils.senderId(),
+            new ConnectionOptions(PeerUtils.senderId())
+    );
 
     private ExchangeHandler<ConnectRequest, ConnectResponse> handler;
     private ConnectionStore connectionStore;
-    private ConnectionImpl connection;
-    private Node node;
+    private SimpleNode node;
     private ConnectHandlerProxy connectHandlerProxy;
     private PeerStore peerStore;
+    private ConnectionImpl connection;
 
     @BeforeEach
     public void setUp() {
-        node = mock(Node.class);
+        node = mock(SimpleNode.class);
         when(node.id()).thenReturn(PeerUtils.receiverId());
 
         //noinspection unchecked
@@ -60,13 +65,8 @@ class ConnectHandlerProxyTest {
         var expected = new Some<>(new ConnectResponse(false, null));
         var actual = connectHandlerProxy.handle(remoteInformation, connectRequest);
         assertEquals(expected, actual);
-        verify(connectionStore).accept(
-                connectRequest.connectionId(),
-                PeerUtils.senderId(),
-                PeerUtils.receiverId(),
-                Connection.Status.AWAITING_WITNESS
-        );
         verify(peerStore).save(remoteInformation.peer());
+        verify(node, never()).selectWitness(any(), any(), any());
     }
 
     @Test
@@ -87,6 +87,7 @@ class ConnectHandlerProxyTest {
         assertEquals(expected, connectHandlerProxy.handle(remoteInformation, connectRequest));
         verify(connectionStore, never()).accept(any(), any(), any(), any());
         verify(peerStore).save(remoteInformation.peer());
+        verify(node, never()).selectWitness(any(), any(), any());
     }
 
     @Test
@@ -101,6 +102,7 @@ class ConnectHandlerProxyTest {
         connectHandlerProxy.handle(remoteInformation, connectRequest);
         assertEquals(remoteInformation.peer().addresses(), storedPeer.addresses());
         verify(peerStore).save(storedPeer);
+        verify(node, never()).selectWitness(any(), any(), any());
     }
 
     @Test
@@ -109,6 +111,37 @@ class ConnectHandlerProxyTest {
         connectHandlerProxy = assertDoesNotThrow(() -> new ConnectHandlerProxy(handler, connectionStore, node));
         var ex = assertThrows(NullPointerException.class, () -> connectHandlerProxy.handle(remoteInformation, connectRequest));
         assertEquals("User handler returned a null ConnectResponse", ex.getMessage());
+    }
+
+    @Test
+    void testReceiverSelectsWitness() {
+        var request = new ConnectRequest(
+                connectRequest.connectionId(),
+                connectRequest.sender(),
+                new ConnectionOptions(PeerUtils.receiverId())
+        );
+        connection = new ConnectionImpl(
+                connectRequest.connectionId(),
+                connectRequest.sender(),
+                PeerUtils.receiverId(),
+                Connection.Status.REQUESTING_WITNESS
+        );
+        connection.lock.writeLock().lock();
+        when(connectionStore.accept(connectRequest.connectionId(), connection.sender(), node.id(), Connection.Status.REQUESTING_WITNESS))
+                .thenReturn(new Writeable(connection));
+        var expected = new Some<>(new ConnectResponse(false, null));
+        var actual = connectHandlerProxy.handle(remoteInformation, request);
+        assertEquals(expected, actual);
+        verify(peerStore).save(remoteInformation.peer());
+        verify(node).selectWitness(remoteInformation.peer(), connection, new TransportOptions());
+    }
+
+    @Test
+    void testFailsToAcceptConnection() {
+        when(connectionStore.accept(connectRequest.connectionId(), connection.sender(), node.id(), Connection.Status.AWAITING_WITNESS))
+                .thenReturn(new Connection.Absent());
+        var ex = assertThrows(IllegalStateException.class, () -> connectHandlerProxy.handle(remoteInformation, connectRequest));
+        assertEquals("Failed to accept connection " + connectRequest.connectionId(), ex.getMessage());
     }
 
 }

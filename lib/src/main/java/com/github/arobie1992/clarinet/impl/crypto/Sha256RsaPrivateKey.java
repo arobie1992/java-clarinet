@@ -27,7 +27,7 @@ public class Sha256RsaPrivateKey implements PrivateKey {
             var cipher = Cipher.getInstance("RSA");
             cipher.init(Cipher.ENCRYPT_MODE, javaKey);
             cipher.update(enc);
-            return new Bytes(cipher.doFinal());
+            return Bytes.of(cipher.doFinal());
         } catch (NoSuchAlgorithmException|NoSuchPaddingException|InvalidKeyException|IllegalBlockSizeException|BadPaddingException e) {
             throw new SigningException(e);
         }

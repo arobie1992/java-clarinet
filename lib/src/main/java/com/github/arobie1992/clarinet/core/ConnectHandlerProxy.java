@@ -3,15 +3,16 @@ package com.github.arobie1992.clarinet.core;
 import com.github.arobie1992.clarinet.adt.Some;
 import com.github.arobie1992.clarinet.transport.ExchangeHandler;
 import com.github.arobie1992.clarinet.transport.RemoteInformation;
+import com.github.arobie1992.clarinet.transport.TransportOptions;
 
 import java.util.Objects;
 
 class ConnectHandlerProxy implements ExchangeHandler<ConnectRequest, ConnectResponse> {
     private final ExchangeHandler<ConnectRequest, ConnectResponse> userHandler;
     private final ConnectionStore connectionStore;
-    private final Node node;
+    private final SimpleNode node;
 
-    ConnectHandlerProxy(ExchangeHandler<ConnectRequest, ConnectResponse> userHandler, ConnectionStore connectionStore, Node node) {
+    ConnectHandlerProxy(ExchangeHandler<ConnectRequest, ConnectResponse> userHandler, ConnectionStore connectionStore, SimpleNode node) {
         this.userHandler = userHandler == null ? DEFAULT_HANDLER : userHandler;
         this.connectionStore = Objects.requireNonNull(connectionStore);
         this.node = Objects.requireNonNull(node);
@@ -25,8 +26,17 @@ class ConnectHandlerProxy implements ExchangeHandler<ConnectRequest, ConnectResp
 
         var resp = Objects.requireNonNull(userHandler.handle(remoteInformation, message), "User handler returned a null ConnectResponse");
         if(!resp.value().rejected()) {
-            // no further work to do so just close the ref
-            connectionStore.accept(message.connectionId(), message.sender(), node.id(), Connection.Status.AWAITING_WITNESS).close();
+            var status = message.options().witnessSelector().equals(node.id())
+                    ? Connection.Status.REQUESTING_WITNESS
+                    : Connection.Status.AWAITING_WITNESS;
+            try(var ref = connectionStore.accept(message.connectionId(), message.sender(), node.id(), status)) {
+                if(!(ref instanceof Writeable(ConnectionImpl conn))) {
+                    throw new IllegalStateException("Failed to accept connection " + message.connectionId());
+                }
+                if(message.options().witnessSelector().equals(node.id())) {
+                    node.selectWitness(remoteInformation.peer(), conn, new TransportOptions());
+                }
+            }
         }
 
         return resp;

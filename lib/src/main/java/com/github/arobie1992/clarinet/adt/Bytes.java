@@ -6,10 +6,8 @@ import java.util.Objects;
 /**
  * An immutable byte array that implements equality based on the contents.
  */
-public class Bytes {
-    private final byte[] bytes;
-
-    private Bytes(byte[] bytes) {
+public record Bytes(byte[] bytes) {
+    public Bytes(byte[] bytes) {
         this.bytes = Arrays.copyOf(bytes, bytes.length);
     }
 

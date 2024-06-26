@@ -135,5 +135,7 @@ public interface NodeBuilder {
      */
     NodeBuilder messageForwardHandler(SendHandler<MessageForward> messageForwardHandler);
 
+    NodeBuilder queryForwardHandler(SendHandler<QueryForward> queryForwardHandler);
+
     Node build();
 }

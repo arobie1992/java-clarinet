@@ -22,7 +22,7 @@ class BytesTest {
 
     @Test
     void testNullBytes() {
-        assertThrows(NullPointerException.class, () -> new Bytes(null));
+        assertThrows(NullPointerException.class, () -> Bytes.of(null));
     }
 
     @Test
