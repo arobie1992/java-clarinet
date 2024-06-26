@@ -214,6 +214,8 @@ class SimpleNode implements Node {
     }
 
     void selectWitness(Peer peerToNotify, ConnectionImpl connection, TransportOptions transportOptions) {
+        connection.setStatus(Connection.Status.REQUESTING_WITNESS);
+
         record PeerAndResponse(Peer peer, WitnessResponse witnessResponse) {}
         Predicate<PeerAndResponse> byRejected = par -> {
             if(par.witnessResponse.rejected()) {
