@@ -19,6 +19,7 @@ repositories {
 dependencies {
     implementation("com.google.cloud:google-cloud-firestore:3.21.5")
     implementation(project(":lib"))
+    implementation("ch.qos.logback:logback-classic:1.5.6")
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

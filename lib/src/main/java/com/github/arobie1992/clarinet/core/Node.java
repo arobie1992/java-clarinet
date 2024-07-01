@@ -5,12 +5,15 @@ import com.github.arobie1992.clarinet.crypto.KeyStore;
 import com.github.arobie1992.clarinet.message.*;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
+import com.github.arobie1992.clarinet.query.QueryTerms;
 import com.github.arobie1992.clarinet.reputation.AssessmentStore;
 import com.github.arobie1992.clarinet.reputation.ReputationService;
 import com.github.arobie1992.clarinet.transport.ExchangeHandler;
 import com.github.arobie1992.clarinet.transport.SendHandler;
 import com.github.arobie1992.clarinet.transport.Transport;
 import com.github.arobie1992.clarinet.transport.TransportOptions;
+
+import java.util.stream.Stream;
 
 public interface Node {
     PeerId id();
@@ -22,6 +25,8 @@ public interface Node {
     ReputationService reputationService();
 
     Connection.ReadableReference findConnection(ConnectionId connectionId);
+
+    Stream<Connection.Readable> queryConnections(QueryTerms<Connection> queryTerms);
 
     MessageStore messageStore();
 

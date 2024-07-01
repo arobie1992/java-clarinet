@@ -12,6 +12,7 @@ import com.github.arobie1992.clarinet.message.*;
 import com.github.arobie1992.clarinet.peer.Peer;
 import com.github.arobie1992.clarinet.peer.PeerId;
 import com.github.arobie1992.clarinet.peer.PeerStore;
+import com.github.arobie1992.clarinet.query.QueryTerms;
 import com.github.arobie1992.clarinet.reputation.Assessment;
 import com.github.arobie1992.clarinet.reputation.AssessmentStore;
 import com.github.arobie1992.clarinet.reputation.ReputationService;
@@ -128,6 +129,24 @@ class SimpleNode implements Node {
     @Override
     public Connection.ReadableReference findConnection(ConnectionId connectionId) {
         return connectionStore.findForRead(connectionId);
+    }
+
+    /**
+     * Query for connections.
+     * <p>
+     * Connections are lazily locked prior to being presented to the user. This is done to allow other connections to
+     * be operated on while streaming. It is up to the user to release the lock as they would when using
+     * {@link SimpleNode#findConnection(ConnectionId)}. The ordering is loose to prevent excessive locking so if
+     * stricter ordering is necessary, it will need to be done out of band. However, the where condition is strict so
+     * users can be sure that any connections they receive as part of the stream meet the {@link QueryTerms#where()}
+     * predicate.
+     *
+     * @param queryTerms the terms used to execute the query.
+     * @return A {@code Stream} of {@link Connection.Reference}s.
+     */
+    @Override
+    public Stream<Connection.Readable> queryConnections(QueryTerms<Connection> queryTerms) {
+        return connectionStore.query(queryTerms);
     }
 
     @Override
